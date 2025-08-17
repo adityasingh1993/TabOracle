@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabOracle Similarity Scores Demo</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .demo-section { margin: 20px 0; padding: 20px; border: 1px solid #eee; border-radius: 8px; }
+        .success { border-left: 4px solid #28a745; background: #f8fff9; }
+        .info { border-left: 4px solid #17a2b8; background: #f8f9ff; }
+        .warning { border-left: 4px solid #ffc107; background: #fffbf0; }
+        .demo-button { background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .demo-button:hover { background: #5a6fd8; }
+        .score-demo { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .similarity-breakdown { margin-top: 8px; padding: 8px 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; font-size: 11px; line-height: 1.4; }
+        .score-item { display: inline-block; margin-right: 8px; padding: 2px 6px; border-radius: 6px; font-weight: 500; }
+        .total-score { background: #28a745; color: white; }
+        .content-score { background: #007bff; color: white; }
+        .semantic-score { background: #6f42c1; color: white; }
+        .keyword-score { background: #fd7e14; color: white; }
+        .category-score { background: #20c997; color: white; }
+        .content-availability { background: #6c757d; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🎯 TabOracle Similarity Scores Demo</h1>
+    
+    <div class="demo-section info">
+        <h2>🔍 Enhanced Similarity Score Display</h2>
+        <p>TabOracle now shows detailed breakdowns of how search relevance is calculated, including:</p>
+        <ul>
+            <li><strong>🎯 Total Score</strong> - Overall relevance score</li>
+            <li><strong>📄 Content Similarity</strong> - How well the query matches page content</li>
+            <li><strong>🧠 Semantic Matches</strong> - NLP-based concept understanding</li>
+            <li><strong>🔑 Keywords</strong> - Number of relevant keywords found</li>
+            <li><strong>🏷️ Category</strong> - Tab categorization (development, email, etc.)</li>
+            <li><strong>📚 Content Availability</strong> - Richness of extracted content</li>
+        </ul>
+    </div>
+    
+    <div class="demo-section success">
+        <h2>🧪 Test the Enhanced Search</h2>
+        <p>To see these similarity scores in action:</p>
+        <ol>
+            <li><strong>Reload TabOracle extension</strong> in chrome://extensions/</li>
+            <li><strong>Press Ctrl+Space</strong> to open global search</li>
+            <li><strong>Search for terms like:</strong> "development", "react", "tutorial", "api"</li>
+            <li><strong>Look for the similarity breakdown</strong> below each search result</li>
+        </ol>
+    </div>
+    
+    <div class="demo-section warning">
+        <h2>📊 Sample Similarity Score Display</h2>
+        <p>Here's what you'll see in search results:</p>
+        
+        <div class="score-demo">
+            <h3>Example Search Result</h3>
+            <p><strong>React Tutorial - Getting Started</strong></p>
+            <p><em>reactjs.org/tutorial/tutorial.html</em></p>
+            
+            <!-- Similarity Breakdown Demo -->
+            <div class="similarity-breakdown">
+                <span class="score-item total-score">🎯 Total: 87</span>
+                <span class="score-item content-score">📄 Content: 92%</span>
+                <span class="score-item semantic-score">🧠 Semantic: 78%</span>
+                <span class="score-item keyword-score">🔑 Keywords: 12</span>
+                <span class="score-item category-score">🏷️ Development</span>
+                <span class="score-item content-availability">📚 Rich</span>
+            </div>
+        </div>
+        
+        <div class="score-demo">
+            <h3>Another Example</h3>
+            <p><strong>GitHub - User Profile</strong></p>
+            <p><em>github.com/username</em></p>
+            
+            <div class="similarity-breakdown">
+                <span class="score-item total-score">🎯 Total: 65</span>
+                <span class="score-item content-score">📄 Content: 45%</span>
+                <span class="score-item semantic-score">🧠 Semantic: 82%</span>
+                <span class="score-item keyword-score">🔑 Keywords: 8</span>
+                <span class="score-item category-score">🏷️ Development</span>
+                <span class="score-item content-availability">📄 Medium</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="demo-section info">
+        <h2>🔧 How Scores Are Calculated</h2>
+        <p><strong>Content Similarity (📄):</strong> Direct text matching between search query and page content</p>
+        <p><strong>Semantic Similarity (🧠):</strong> Concept-based matching using NLP word embeddings</p>
+        <p><strong>Keyword Relevance (🔑):</strong> Number of relevant keywords extracted from the page</p>
+        <p><strong>Category Boost (🏷️):</strong> Bonus points for matching tab categories</p>
+        <p><strong>Content Richness (📚):</strong> Indicates how much content was extracted</p>
+    </div>
+    
+    <div class="demo-section success">
+        <h2>🎯 Testing Commands</h2>
+        <button class="demo-button" onclick="testSearch('development')">Test "development"</button>
+        <button class="demo-button" onclick="testSearch('react tutorial')">Test "react tutorial"</button>
+        <button class="demo-button" onclick="testSearch('github api')">Test "github api"</button>
+        <button class="demo-button" onclick="testSearch('stackoverflow error')">Test "stackoverflow error"</button>
+        <div id="test-results"></div>
+    </div>
+    
+    <div class="demo-section warning">
+        <h2>⚠️ Important Notes</h2>
+        <ul>
+            <li><strong>Content extraction</strong> only works on http/https pages</li>
+            <li><strong>Semantic search</strong> requires the extension to be properly loaded</li>
+            <li><strong>Similarity scores</strong> are calculated in real-time</li>
+            <li><strong>Higher scores</strong> indicate better relevance to your search</li>
+        </ul>
+    </div>
+
+    <script>
+        function testSearch(query) {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = `
+                <div class="score-demo">
+                    <h4>🔍 Testing: "${query}"</h4>
+                    <p>This would trigger a TabOracle search with detailed similarity scoring.</p>
+                    <p>In the actual extension, you would see:</p>
+                    <ul>
+                        <li>Real-time content analysis</li>
+                        <li>Semantic similarity calculations</li>
+                        <li>Keyword extraction results</li>
+                        <li>Context-aware scoring</li>
+                    </ul>
+                    <p><strong>Next step:</strong> Press Ctrl+Space and search for "${query}" to see real results!</p>
+                </div>
+            `;
+        }
+        
+        // Log page load
+        window.addEventListener('load', () => {
+            console.log('🧪 TabOracle Similarity Scores Demo Page Loaded');
+            console.log('💡 Press Ctrl+Space to test the enhanced search functionality');
+        });
+        
+        // Listen for keyboard shortcuts
+        document.addEventListener('keydown', (event) => {
+            if (event.ctrlKey && event.code === 'Space') {
+                console.log('⌨️ Ctrl+Space detected! TabOracle search should open.');
+                document.body.style.border = '3px solid #28a745';
+                setTimeout(() => {
+                    document.body.style.border = 'none';
+                }, 1000);
+            }
+        });
+    </script>
+</body>
+</html>

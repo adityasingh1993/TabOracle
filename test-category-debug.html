@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabOracle Category Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .test-button:hover {
+            background: #005a87;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #007cba;
+        }
+        .error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        .success {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .category-test {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+        .category-test h4 {
+            margin: 0 0 12px 0;
+            color: #1976d2;
+        }
+        .category-test input {
+            width: 100%;
+            padding: 8px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .category-test button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 TabOracle Category Debug Test</h1>
+        <p>This page helps debug the category functionality. Open the browser console to see detailed logs.</p>
+        
+        <div class="test-section">
+            <h3>🔍 Basic Extension Test</h3>
+            <button class="test-button" onclick="testExtension()">Test Extension Connection</button>
+            <button class="test-button" onclick="testGetTabs()">Test Get All Tabs</button>
+            <div id="basicResults"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🏷️ Category Function Test</h3>
+            <button class="test-button" onclick="testCategories()">Test Category Generation</button>
+            <div id="categoryResults"></div>
+        </div>
+        
+        <div class="category-test">
+            <h4>🧪 Test Individual Tab Categorization</h4>
+            <input type="text" id="testUrl" placeholder="Enter URL to test categorization..." value="https://github.com/username/repo">
+            <input type="text" id="testTitle" placeholder="Enter tab title to test..." value="username/repo: Repository description">
+            <button onclick="testIndividualCategorization()">Test Categorization</button>
+            <div id="individualResults"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📊 Console Logs</h3>
+            <button class="test-button" onclick="clearLogs()">Clear Logs</button>
+            <div id="logs" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // Log function to display messages on the page
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logEntry.className = type;
+            logsDiv.appendChild(logEntry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+            
+            // Also log to console
+            console.log(`[TabOracle Debug] ${message}`);
+        }
+
+        // Test basic extension connection
+        async function testExtension() {
+            const resultsDiv = document.getElementById('basicResults');
+            resultsDiv.innerHTML = '<div class="result">Testing extension connection...</div>';
+            
+            try {
+                const response = await chrome.runtime.sendMessage({ action: 'ping' });
+                log('Extension ping response: ' + JSON.stringify(response));
+                
+                if (response && response.status === 'ok') {
+                    resultsDiv.innerHTML = '<div class="result success">✅ Extension is working! Response: ' + JSON.stringify(response) + '</div>';
+                } else {
+                    resultsDiv.innerHTML = '<div class="result error">❌ Extension responded but with unexpected data: ' + JSON.stringify(response) + '</div>';
+                }
+            } catch (error) {
+                log('Extension test error: ' + error.message, 'error');
+                resultsDiv.innerHTML = '<div class="result error">❌ Extension test failed: ' + error.message + '</div>';
+            }
+        }
+
+        // Test getting all tabs
+        async function testGetTabs() {
+            const resultsDiv = document.getElementById('basicResults');
+            resultsDiv.innerHTML = '<div class="result">Getting all tabs...</div>';
+            
+            try {
+                const response = await chrome.runtime.sendMessage({ action: 'getAllTabs' });
+                log('Get tabs response: ' + JSON.stringify(response));
+                
+                if (response && response.tabs) {
+                    const tabCount = response.tabs.length;
+                    resultsDiv.innerHTML = '<div class="result success">✅ Found ' + tabCount + ' tabs</div>';
+                    
+                    // Show first few tabs
+                    if (tabCount > 0) {
+                        const sampleTabs = response.tabs.slice(0, 3);
+                        const tabsHtml = sampleTabs.map(tab => 
+                            `<div style="margin: 5px 0; padding: 5px; background: #f1f1f1; border-radius: 3px;">
+                                <strong>${tab.title || 'No title'}</strong><br>
+                                <small>${tab.url || 'No URL'}</small><br>
+                                <small>Context: ${tab.context ? 'Available' : 'None'}</small>
+                            </div>`
+                        ).join('');
+                        resultsDiv.innerHTML += '<div class="result">Sample tabs:<br>' + tabsHtml + '</div>';
+                    }
+                } else {
+                    resultsDiv.innerHTML = '<div class="result error">❌ No tabs returned: ' + JSON.stringify(response) + '</div>';
+                }
+            } catch (error) {
+                log('Get tabs error: ' + error.message, 'error');
+                resultsDiv.innerHTML = '<div class="result error">❌ Get tabs failed: ' + error.message + '</div>';
+            }
+        }
+
+        // Test category generation
+        async function testCategories() {
+            const resultsDiv = document.getElementById('categoryResults');
+            resultsDiv.innerHTML = '<div class="result">Testing category generation...</div>';
+            
+            try {
+                // First get tabs
+                const tabsResponse = await chrome.runtime.sendMessage({ action: 'getAllTabs' });
+                log('Tabs for category test: ' + JSON.stringify(tabsResponse));
+                
+                if (!tabsResponse || !tabsResponse.tabs) {
+                    resultsDiv.innerHTML = '<div class="result error">❌ No tabs available for category test</div>';
+                    return;
+                }
+                
+                const tabs = tabsResponse.tabs;
+                log('Testing categorization for ' + tabs.length + ' tabs');
+                
+                // Test categorization logic (simplified version)
+                const categories = {};
+                let categorizedCount = 0;
+                
+                tabs.forEach((tab, index) => {
+                    log(`Processing tab ${index + 1}/${tabs.length}: "${tab.title}"`);
+                    
+                    // Simple categorization test
+                    let category = null;
+                    
+                    if (tab.url) {
+                        const urlLower = tab.url.toLowerCase();
+                        if (urlLower.includes('github') || urlLower.includes('stackoverflow')) {
+                            category = '💻 Development';
+                        } else if (urlLower.includes('youtube') || urlLower.includes('vimeo')) {
+                            category = '🎥 Media';
+                        } else if (urlLower.includes('gmail') || urlLower.includes('outlook')) {
+                            category = '📧 Email';
+                        } else if (urlLower.includes('amazon') || urlLower.includes('ebay')) {
+                            category = '🛒 Shopping';
+                        } else if (urlLower.includes('facebook') || urlLower.includes('twitter')) {
+                            category = '👥 Social';
+                        }
+                    }
+                    
+                    if (category) {
+                        if (!categories[category]) {
+                            categories[category] = { count: 0, tabs: [] };
+                        }
+                        categories[category].count++;
+                        categories[category].tabs.push(tab);
+                        categorizedCount++;
+                        log(`Tab categorized as: ${category}`);
+                    } else {
+                        log(`Tab could not be categorized: "${tab.title}"`);
+                    }
+                });
+                
+                log('Categorization results: ' + JSON.stringify(categories));
+                
+                if (Object.keys(categories).length > 0) {
+                    const categoriesHtml = Object.entries(categories).map(([name, data]) => 
+                        `<div style="margin: 5px 0; padding: 5px; background: #f1f1f1; border-radius: 3px;">
+                            <strong>${name}</strong>: ${data.count} tabs
+                        </div>`
+                    ).join('');
+                    
+                    resultsDiv.innerHTML = `
+                        <div class="result success">✅ Categories generated successfully!</div>
+                        <div class="result">
+                            <strong>Summary:</strong><br>
+                            Total tabs: ${tabs.length}<br>
+                            Categorized: ${categorizedCount}<br>
+                            Categories found: ${Object.keys(categories).length}
+                        </div>
+                        <div class="result">Categories:<br>${categoriesHtml}</div>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = '<div class="result error">❌ No categories could be generated</div>';
+                }
+                
+            } catch (error) {
+                log('Category test error: ' + error.message, 'error');
+                resultsDiv.innerHTML = '<div class="result error">❌ Category test failed: ' + error.message + '</div>';
+            }
+        }
+
+        // Test individual tab categorization
+        function testIndividualCategorization() {
+            const url = document.getElementById('testUrl').value;
+            const title = document.getElementById('testTitle').value;
+            const resultsDiv = document.getElementById('individualResults');
+            
+            if (!url || !title) {
+                alert('Please enter both URL and title');
+                return;
+            }
+            
+            resultsDiv.innerHTML = '<div class="result">Testing categorization...</div>';
+            
+            // Simple categorization logic
+            let category = null;
+            const urlLower = url.toLowerCase();
+            const titleLower = title.toLowerCase();
+            
+            if (urlLower.includes('github') || urlLower.includes('stackoverflow')) {
+                category = '💻 Development';
+            } else if (urlLower.includes('youtube') || urlLower.includes('vimeo')) {
+                category = '🎥 Media';
+            } else if (urlLower.includes('gmail') || urlLower.includes('outlook')) {
+                category = '📧 Email';
+            } else if (urlLower.includes('amazon') || urlLower.includes('ebay')) {
+                category = '🛒 Shopping';
+            } else if (urlLower.includes('facebook') || urlLower.includes('twitter')) {
+                category = '👥 Social';
+            }
+            
+            if (category) {
+                resultsDiv.innerHTML = `
+                    <div class="result success">✅ Categorized as: ${category}</div>
+                    <div class="result">
+                        <strong>Analysis:</strong><br>
+                        URL: ${url}<br>
+                        Title: ${title}<br>
+                        Category: ${category}
+                    </div>
+                `;
+            } else {
+                resultsDiv.innerHTML = `
+                    <div class="result error">❌ Could not categorize</div>
+                    <div class="result">
+                        <strong>Analysis:</strong><br>
+                        URL: ${url}<br>
+                        Title: ${title}<br>
+                        Category: None detected
+                    </div>
+                `;
+            }
+        }
+
+        // Clear logs
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            log('Page loaded, TabOracle category debug test ready');
+            log('Make sure the TabOracle extension is loaded and this page has permission to access it');
+        });
+    </script>
+</body>
+</html>

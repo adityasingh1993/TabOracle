@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabOracle Extension Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #eee; border-radius: 8px; }
+        .test-button { background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .test-button:hover { background: #5a6fd8; }
+        .result { background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 10px 0; font-family: monospace; }
+        .success { border-left: 4px solid #28a745; }
+        .error { border-left: 4px solid #dc3545; }
+        .info { border-left: 4px solid #17a2b8; }
+    </style>
+</head>
+<body>
+    <h1>🧪 TabOracle Extension Test Page</h1>
+    <p>This page helps test if the TabOracle extension is working correctly.</p>
+    
+    <div class="test-section">
+        <h2>🔍 Basic Extension Tests</h2>
+        <button class="test-button" onclick="testPing()">Test Ping</button>
+        <button class="test-button" onclick="testGetTabs()">Test Get Tabs</button>
+        <button class="test-button" onclick="testSearchTabs()">Test Search</button>
+        <div id="basic-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>🎯 Keyboard Shortcut Test</h2>
+        <p>Press <strong>Ctrl+Space</strong> to test the global search shortcut.</p>
+        <p>This should open the TabOracle search overlay on this page.</p>
+        <div id="shortcut-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>📊 Extension Status</h2>
+        <div id="status-results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>🚨 Error Log</h2>
+        <div id="error-log"></div>
+    </div>
+
+    <script>
+        // Test functions
+        function logResult(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${type}`;
+            resultDiv.innerHTML = `<strong>[${timestamp}]</strong> ${message}`;
+            
+            if (type === 'error') {
+                document.getElementById('error-log').appendChild(resultDiv);
+            } else if (type === 'success') {
+                document.getElementById('basic-results').appendChild(resultDiv);
+            }
+        }
+
+        function testPing() {
+            try {
+                chrome.runtime.sendMessage({ action: 'ping' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        logResult(`Ping failed: ${chrome.runtime.lastError.message}`, 'error');
+                    } else if (response && response.status === 'ok') {
+                        logResult(`✅ Ping successful: ${response.message}`, 'success');
+                    } else {
+                        logResult(`❌ Ping response invalid: ${JSON.stringify(response)}`, 'error');
+                    }
+                });
+            } catch (error) {
+                logResult(`❌ Ping test error: ${error.message}`, 'error');
+            }
+        }
+
+        function testGetTabs() {
+            try {
+                chrome.runtime.sendMessage({ action: 'getAllTabs' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        logResult(`Get tabs failed: ${chrome.runtime.lastError.message}`, 'error');
+                    } else if (response && response.tabs) {
+                        logResult(`✅ Get tabs successful: ${response.tabs.length} tabs found`, 'success');
+                    } else {
+                        logResult(`❌ Get tabs response invalid: ${JSON.stringify(response)}`, 'error');
+                    }
+                });
+            } catch (error) {
+                logResult(`❌ Get tabs test error: ${error.message}`, 'error');
+            }
+        }
+
+        function testSearchTabs() {
+            try {
+                chrome.runtime.sendMessage({ action: 'searchTabs', query: 'test' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        logResult(`Search failed: ${chrome.runtime.lastError.message}`, 'error');
+                    } else if (response && response.results) {
+                        logResult(`✅ Search successful: ${response.results.length} results found`, 'success');
+                    } else {
+                        logResult(`❌ Search response invalid: ${JSON.stringify(response)}`, 'error');
+                    }
+                });
+            } catch (error) {
+                logResult(`❌ Search test error: ${error.message}`, 'error');
+            }
+        }
+
+        function checkExtensionStatus() {
+            try {
+                // Check if chrome.runtime is available
+                if (typeof chrome !== 'undefined' && chrome.runtime) {
+                    logResult('✅ Chrome runtime API available', 'success');
+                    
+                    // Check if we can send messages
+                    chrome.runtime.sendMessage({ action: 'ping' }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            logResult(`❌ Extension communication failed: ${chrome.runtime.lastError.message}`, 'error');
+                        } else {
+                            logResult('✅ Extension communication working', 'success');
+                        }
+                    });
+                } else {
+                    logResult('❌ Chrome runtime API not available', 'error');
+                }
+            } catch (error) {
+                logResult(`❌ Status check error: ${error.message}`, 'error');
+            }
+        }
+
+        // Run initial tests
+        window.addEventListener('load', () => {
+            logResult('🚀 Page loaded, running extension tests...', 'info');
+            setTimeout(checkExtensionStatus, 1000);
+        });
+
+        // Listen for keyboard shortcuts
+        document.addEventListener('keydown', (event) => {
+            if (event.ctrlKey && event.code === 'Space') {
+                logResult('⌨️ Ctrl+Space detected!', 'success');
+                document.getElementById('shortcut-results').innerHTML = 
+                    '<div class="result success">✅ Ctrl+Space shortcut detected! The TabOracle search should now be visible.</div>';
+            }
+        });
+
+        // Log any console errors
+        window.addEventListener('error', (event) => {
+            logResult(`❌ JavaScript error: ${event.message} at ${event.filename}:${event.lineno}`, 'error');
+        });
+
+        // Log unhandled promise rejections
+        window.addEventListener('unhandledrejection', (event) => {
+            logResult(`❌ Unhandled promise rejection: ${event.reason}`, 'error');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabOracle Minimal</title>
+    <style>
+        body {
+            width: 400px;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .tab-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .tab-item:hover {
+            background: #f5f5f5;
+        }
+        .tab-favicon {
+            width: 16px;
+            height: 16px;
+            margin-right: 10px;
+        }
+        .tab-content {
+            flex: 1;
+        }
+        .tab-title {
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+        .tab-url {
+            font-size: 12px;
+            color: #666;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>🔧 TabOracle Minimal</h2>
+        <p>Testing basic functionality</p>
+    </div>
+    
+    <div id="status" class="status info">Loading tabs...</div>
+    
+    <div id="tabsList">
+        <!-- Tabs will be loaded here -->
+    </div>
+    
+    <script src="popup-minimal.js"></script>
+</body>
+</html>

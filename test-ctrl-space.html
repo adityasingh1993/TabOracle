@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabOracle Ctrl+Space Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #eee; border-radius: 8px; }
+        .success { border-left: 4px solid #28a745; background: #f8fff9; }
+        .info { border-left: 4px solid #17a2b8; background: #f8f9ff; }
+        .warning { border-left: 4px solid #ffc107; background: #fffbf0; }
+    </style>
+</head>
+<body>
+    <h1>🎯 TabOracle Ctrl+Space Test</h1>
+    
+    <div class="test-section info">
+        <h2>🔧 Issue Fixed</h2>
+        <p><strong>Error resolved:</strong> <code>Uncaught ReferenceError: window is not defined</code></p>
+        <p>The issue was using browser-specific APIs in a Chrome extension service worker context.</p>
+    </div>
+    
+    <div class="test-section success">
+        <h2>✅ Ready to Test</h2>
+        <p>The extension should now work without errors. Here's what to test:</p>
+        <ol>
+            <li><strong>Reload the extension</strong> in <code>chrome://extensions/</code></li>
+            <li><strong>Press Ctrl+Space</strong> anywhere on this page</li>
+            <li><strong>Verify the search overlay appears</strong></li>
+            <li><strong>Test basic tab search</strong></li>
+        </ol>
+    </div>
+    
+    <div class="test-section warning">
+        <h2>⚠️ Testing Steps</h2>
+        <p><strong>Step 1:</strong> Go to <code>chrome://extensions/</code></p>
+        <p><strong>Step 2:</strong> Find TabOracle and click the refresh button (🔄)</p>
+        <p><strong>Step 3:</strong> Come back to this page</p>
+        <p><strong>Step 4:</strong> Press <strong>Ctrl+Space</strong></p>
+        <p><strong>Expected Result:</strong> TabOracle search overlay should appear</p>
+    </div>
+    
+    <div class="test-section info">
+        <h2>🔍 What to Look For</h2>
+        <p>After pressing Ctrl+Space, you should see:</p>
+        <ul>
+            <li>🔍 A search input field</li>
+            <li>📋 A list of your open tabs</li>
+            <li>🎯 Search functionality working</li>
+            <li>❌ No console errors</li>
+        </ul>
+    </div>
+    
+    <div class="test-section success">
+        <h2>🎉 Success Criteria</h2>
+        <p>✅ Ctrl+Space triggers search overlay</p>
+        <p>✅ No JavaScript errors in console</p>
+        <p>✅ Tab search functionality works</p>
+        <p>✅ Extension loads without issues</p>
+    </div>
+    
+    <script>
+        // Test if the extension is accessible
+        window.addEventListener('load', () => {
+            console.log('🧪 TabOracle Ctrl+Space Test Page Loaded');
+            
+            // Test basic extension communication
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                console.log('✅ Chrome runtime API available');
+                
+                // Test ping to extension
+                chrome.runtime.sendMessage({ action: 'ping' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.log('⚠️ Extension communication test:', chrome.runtime.lastError.message);
+                    } else if (response && response.status === 'ok') {
+                        console.log('✅ Extension communication working:', response.message);
+                    } else {
+                        console.log('❌ Extension response invalid:', response);
+                    }
+                });
+            } else {
+                console.log('❌ Chrome runtime API not available');
+            }
+        });
+        
+        // Listen for keyboard shortcuts
+        document.addEventListener('keydown', (event) => {
+            if (event.ctrlKey && event.code === 'Space') {
+                console.log('⌨️ Ctrl+Space detected!');
+                document.body.style.border = '3px solid #28a745';
+                setTimeout(() => {
+                    document.body.style.border = 'none';
+                }, 1000);
+            }
+        });
+        
+        // Log any errors
+        window.addEventListener('error', (event) => {
+            console.error('❌ Page error:', event.error);
+        });
+    </script>
+</body>
+</html>

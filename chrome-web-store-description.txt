@@ -1,0 +1,66 @@
+TabOracle - Intelligent Tab Management & Search
+
+Transform your browsing experience with TabOracle, the intelligent Chrome extension that revolutionizes how you manage and search through your browser tabs.
+
+🚀 KEY FEATURES:
+
+🔍 SMART TAB SEARCH
+• Press Ctrl+Space anywhere to instantly search all tabs
+• Find tabs based on content, not just titles
+• Context-aware results with intelligent relevance scoring
+
+🏷️ INTELLIGENT CATEGORIZATION
+• Tabs automatically organized into logical groups
+• Smart categories: Development, Documentation, Media, News, Shopping, Social
+• Confidence scoring shows how accurate each categorization is
+
+🧠 ADVANCED TAB MANAGEMENT
+• Three powerful search modes for different use cases
+• Deep content analysis for better organization
+• Performance optimized - fast, responsive, and lightweight
+
+🎯 PERFECT FOR:
+• Developers managing multiple project tabs
+• Researchers organizing information across many sources
+• Students keeping track of study materials
+• Professionals managing work-related browsing
+• Power users who regularly have 20+ tabs open
+
+💡 HOW IT WORKS:
+TabOracle uses a sophisticated multi-layered approach:
+1. Domain Analysis - Recognizes known websites
+2. Content Analysis - Analyzes page content for keywords
+3. Semantic Understanding - Uses NLP techniques to understand context
+4. User Behavior Learning - Adapts to your browsing patterns
+
+🔒 PRIVACY & SECURITY:
+• All processing happens on your device
+• No data collection or storage
+• Open source code you can trust
+• Minimal permissions required
+
+🚀 PERFORMANCE FEATURES:
+• Lightweight with minimal browser impact
+• Instant search results as you type
+• Smart caching for efficient memory usage
+• Background processing without blocking UI
+
+🎨 USER INTERFACE:
+• Clean, modern design that fits your workflow
+• Responsive layout for all screen sizes
+• Dark/light theme support
+• Full keyboard navigation
+
+🔮 FUTURE ROADMAP:
+• AI-powered categorization with Gemini Nano
+• Custom category creation
+• Tab analytics and insights
+• Cross-device synchronization
+
+Transform your browsing experience with TabOracle - the intelligent way to manage your tabs! 
+
+Press Ctrl+Space anywhere to get started, or click the extension icon to explore the powerful tabbed interface.
+
+Perfect for developers, researchers, students, and anyone who regularly works with multiple browser tabs. TabOracle makes tab management effortless and intelligent.
+
+Install now and experience the future of tab organization!

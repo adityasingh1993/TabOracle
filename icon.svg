@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <title>TabOracle</title>
+  
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Main background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#bgGradient)" stroke="#ffffff" stroke-width="3"/>
+  
+  <!-- Tab representation -->
+  <rect x="20" y="35" width="88" height="58" rx="8" fill="white" stroke="#e1e5e9" stroke-width="2"/>
+  
+  <!-- Tab tabs -->
+  <rect x="25" y="30" width="40" height="8" rx="4" fill="#667eea"/>
+  <rect x="70" y="30" width="30" height="8" rx="4" fill="#764ba2"/>
+  
+  <!-- Search magnifying glass -->
+  <circle cx="45" cy="65" r="15" fill="none" stroke="#667eea" stroke-width="3"/>
+  <line x1="55" y1="75" x2="65" y2="85" stroke="#667eea" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- Organization dots -->
+  <circle cx="75" cy="55" r="3" fill="#764ba2"/>
+  <circle cx="80" cy="55" r="3" fill="#764ba2"/>
+  <circle cx="85" cy="55" r="3" fill="#764ba2"/>
+  
+  <!-- Small tab indicators -->
+  <rect x="30" y="80" width="12" height="6" rx="2" fill="#e1e5e9"/>
+  <rect x="45" y="80" width="12" height="6" rx="2" fill="#e1e5e9"/>
+  <rect x="60" y="80" width="12" height="6" rx="2" fill="#e1e5e9"/>
+  
+  <!-- AI/Intelligence indicator -->
+  <circle cx="85" cy="75" r="8" fill="#667eea" opacity="0.8"/>
+  <text x="85" y="79" text-anchor="middle" fill="white" font-size="10" font-family="Arial, sans-serif" font-weight="bold">AI</text>
+</svg>

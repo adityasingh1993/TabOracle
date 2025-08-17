@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "TabOracle-Minimal",
+  "version": "1.0",
+  "description": "Minimal test version",
+  "permissions": [
+    "tabs"
+  ],
+  "background": {
+    "service_worker": "background-minimal.js"
+  },
+  "action": {
+    "default_popup": "popup-minimal.html"
+  }
+}

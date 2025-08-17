@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabOracle - Tabbed Interface Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 32px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 30px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .feature-card {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+        .feature-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        .feature-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .feature-description {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .demo-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .demo-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .demo-description {
+            color: #666;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .tab-preview {
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            overflow: hidden;
+        }
+        .tab-preview .search-tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .tab-preview .search-tab {
+            flex: 1;
+            background: none;
+            border: none;
+            padding: 12px 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-bottom: 3px solid transparent;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        .tab-preview .search-tab:hover {
+            background: #e9ecef;
+        }
+        .tab-preview .search-tab.active {
+            background: white;
+            border-bottom-color: #667eea;
+            color: #667eea;
+        }
+        .tab-preview .tab-icon {
+            font-size: 16px;
+        }
+        .tab-preview .tab-label {
+            font-size: 11px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .tab-preview .tab-content {
+            padding: 20px;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            font-size: 14px;
+        }
+        .instructions {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+        .instructions h3 {
+            margin: 0 0 12px 0;
+            color: #1976d2;
+            font-size: 16px;
+        }
+        .instructions ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+            color: #1565c0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 TabOracle</h1>
+            <p>Intelligent Tab Management with Tabbed Search Interface</p>
+        </div>
+        
+        <div class="content">
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🔍</div>
+                    <div class="feature-title">Normal Search</div>
+                    <div class="feature-description">
+                        Fast search through tab titles and URLs. Perfect for quick navigation when you know what you're looking for.
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🏷️</div>
+                    <div class="feature-title">Category Search</div>
+                    <div class="feature-description">
+                        Browse tabs organized by category. Automatically groups development, documentation, email, media, and more.
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🧠</div>
+                    <div class="feature-title">Smart Search</div>
+                    <div class="feature-description">
+                        Advanced semantic search with content analysis. Finds relevant tabs even when exact matches don't exist.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="demo-section">
+                <div class="demo-title">Tabbed Interface Preview</div>
+                <div class="demo-description">
+                    See how the three search modes are organized in clean, intuitive tabs
+                </div>
+                
+                <div class="tab-preview">
+                    <div class="search-tabs">
+                        <button class="search-tab active">
+                            <span class="tab-icon">🔍</span>
+                            <span class="tab-label">Normal Search</span>
+                        </button>
+                        <button class="search-tab">
+                            <span class="tab-icon">🏷️</span>
+                            <span class="tab-label">Category Search</span>
+                        </button>
+                        <button class="search-tab">
+                            <span class="tab-icon">🧠</span>
+                            <span class="tab-label">Smart Search</span>
+                        </button>
+                    </div>
+                    
+                    <div class="tab-content">
+                        <div style="text-align: center;">
+                            <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
+                            <div style="font-weight: 600; margin-bottom: 8px;">Normal Search Tab</div>
+                            <div>Search tabs by title or URL with instant results</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="demo-section">
+                <div class="demo-title">Key Features</div>
+                <div class="demo-description">
+                    Each search mode is optimized for different use cases
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">⚡</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Fast & Lightweight</div>
+                        <div style="font-size: 12px; color: #666;">No external ML libraries, instant results</div>
+                    </div>
+                    
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">🎯</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Context-Aware</div>
+                        <div style="font-size: 12px; color: #666;">Understands relationships between concepts</div>
+                    </div>
+                    
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">📊</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Detailed Scoring</div>
+                        <div style="font-size: 12px; color: #666;">See exactly why each result is relevant</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="instructions">
+                <h3>🚀 How to Test the New Tabbed Interface</h3>
+                <ul>
+                    <li><strong>Reload the Extension:</strong> Go to chrome://extensions/ and click the refresh button on TabOracle</li>
+                    <li><strong>Open the Popup:</strong> Click the TabOracle icon in your toolbar</li>
+                    <li><strong>Try Each Tab:</strong> Click between Normal Search, Category Search, and Smart Search</li>
+                    <li><strong>Test Search Modes:</strong> Each tab has different search capabilities and UI</li>
+                    <li><strong>Category Browsing:</strong> In Category Search, click on category cards to see grouped tabs</li>
+                    <li><strong>Smart Search:</strong> In Smart Search, try semantic queries like "code" or "development"</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Simple tab switching demo
+        document.querySelectorAll('.search-tab').forEach((tab, index) => {
+            tab.addEventListener('click', () => {
+                // Update active tab
+                document.querySelectorAll('.search-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Update content
+                const content = document.querySelector('.tab-content');
+                const contents = [
+                    `<div style="text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
+                        <div style="font-weight: 600; margin-bottom: 8px;">Normal Search Tab</div>
+                        <div>Search tabs by title or URL with instant results</div>
+                    </div>`,
+                    `<div style="text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">🏷️</div>
+                        <div style="font-weight: 600; margin-bottom: 8px;">Category Search Tab</div>
+                        <div>Browse tabs organized by category and domain</div>
+                    </div>`,
+                    `<div style="text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">🧠</div>
+                        <div style="font-weight: 600; margin-bottom: 8px;">Smart Search Tab</div>
+                        <div>Advanced semantic search with content analysis</div>
+                    </div>`
+                ];
+                content.innerHTML = contents[index];
+            });
+        });
+    </script>
+</body>
+</html>

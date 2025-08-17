@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabOracle - Smart Categorization Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 32px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 30px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .feature-card {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+        .feature-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        .feature-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .feature-description {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .demo-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .demo-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .demo-description {
+            color: #666;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .category-preview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+        .category-preview .category-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 16px 12px;
+            text-align: center;
+            transition: all 0.2s ease;
+        }
+        .category-preview .category-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+        .category-preview .category-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .category-preview .category-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .category-preview .category-count {
+            font-size: 10px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        .category-preview .category-confidence {
+            font-size: 9px;
+            color: #28a745;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .category-preview .category-keywords {
+            font-size: 9px;
+            color: #6c757d;
+            font-style: italic;
+            line-height: 1.2;
+        }
+        .instructions {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+        .instructions h3 {
+            margin: 0 0 12px 0;
+            color: #1976d2;
+            font-size: 16px;
+        }
+        .instructions ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+            color: #1565c0;
+        }
+        .categorization-methods {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .method-item {
+            display: flex;
+            align-items: center;
+            margin: 12px 0;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .method-number {
+            background: #667eea;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        .method-content h4 {
+            margin: 0 0 4px 0;
+            color: #333;
+            font-size: 14px;
+        }
+        .method-content p {
+            margin: 0;
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 TabOracle Smart Categorization</h1>
+            <p>Intelligent automatic categorization based on multiple detection methods</p>
+        </div>
+        
+        <div class="content">
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🌐</div>
+                    <div class="feature-title">Domain Analysis</div>
+                    <div class="feature-description">
+                        Automatically categorizes based on website domains, recognizing development platforms, documentation sites, and more.
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📄</div>
+                    <div class="feature-title">Content Analysis</div>
+                    <div class="feature-description">
+                        Analyzes page content to identify programming concepts, tutorials, news articles, and shopping content.
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔍</div>
+                    <div class="feature-title">Smart Detection</div>
+                    <div class="feature-description">
+                        Uses multiple detection methods with confidence scoring to ensure accurate categorization.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="demo-section">
+                <div class="demo-title">Smart Categorization Preview</div>
+                <div class="demo-description">
+                    See how tabs are automatically categorized with confidence scores and keywords
+                </div>
+                
+                <div class="category-preview">
+                    <div class="category-card">
+                        <span class="category-icon">💻</span>
+                        <div class="category-name">Development</div>
+                        <div class="category-count">8 tabs</div>
+                        <div class="category-confidence">Confidence: 95%</div>
+                        <div class="category-keywords">github, code, api</div>
+                    </div>
+                    
+                    <div class="category-card">
+                        <span class="category-icon">📚</span>
+                        <div class="category-name">Documentation</div>
+                        <div class="category-count">5 tabs</div>
+                        <div class="category-confidence">Confidence: 88%</div>
+                        <div class="category-keywords">docs, tutorial, guide</div>
+                    </div>
+                    
+                    <div class="category-card">
+                        <span class="category-icon">🎥</span>
+                        <div class="category-name">Media</div>
+                        <div class="category-count">3 tabs</div>
+                        <div class="category-confidence">Confidence: 92%</div>
+                        <div class="category-keywords">youtube, video, music</div>
+                    </div>
+                    
+                    <div class="category-card">
+                        <span class="category-icon">📰</span>
+                        <div class="category-name">News</div>
+                        <div class="category-count">4 tabs</div>
+                        <div class="category-confidence">Confidence: 85%</div>
+                        <div class="category-keywords">article, breaking, tech</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="categorization-methods">
+                <h3>🔬 Categorization Methods (in order of priority)</h3>
+                
+                <div class="method-item">
+                    <div class="method-number">1</div>
+                    <div class="method-content">
+                        <h4>Domain-Based Detection</h4>
+                        <p>Highest confidence method - recognizes known domains like github.com, stackoverflow.com, docs.microsoft.com</p>
+                    </div>
+                </div>
+                
+                <div class="method-item">
+                    <div class="method-number">2</div>
+                    <div class="method-content">
+                        <h4>Content Analysis</h4>
+                        <p>Analyzes page content for programming terms, tutorial content, news articles, and shopping information</p>
+                    </div>
+                </div>
+                
+                <div class="method-item">
+                    <div class="method-number">3</div>
+                    <div class="method-content">
+                        <h4>Title & Keyword Matching</h4>
+                        <p>Examines tab titles and extracted keywords for category-relevant terms</p>
+                    </div>
+                </div>
+                
+                <div class="method-item">
+                    <div class="method-number">4</div>
+                    <div class="method-content">
+                        <h4>Semantic Understanding</h4>
+                        <p>Uses NLP techniques to understand context and relationships between concepts</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="demo-section">
+                <div class="demo-title">Supported Categories</div>
+                <div class="demo-description">
+                    TabOracle automatically detects and categorizes tabs into these intelligent groups
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">💻</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Development</div>
+                        <div style="font-size: 12px; color: #666;">GitHub, Stack Overflow, Dev.to, NPM, PyPI</div>
+                    </div>
+                    
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">📚</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Documentation</div>
+                        <div style="font-size: 12px; color: #666;">MDN, W3Schools, API docs, Tutorials</div>
+                    </div>
+                    
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">📧</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Email & Communication</div>
+                        <div style="font-size: 12px; color: #666;">Gmail, Outlook, Slack, Discord, Teams</div>
+                    </div>
+                    
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">🎥</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Media & Entertainment</div>
+                        <div style="font-size: 12px; color: #666;">YouTube, Spotify, Netflix, Twitch</div>
+                    </div>
+                    
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">📰</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">News & Information</div>
+                        <div style="font-size: 12px; color: #666;">BBC, CNN, TechCrunch, Ars Technica</div>
+                    </div>
+                    
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">🛒</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Shopping & Commerce</div>
+                        <div style="font-size: 12px; color: #666;">Amazon, eBay, Etsy, Shopify</div>
+                    </div>
+                    
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">👥</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Social Media</div>
+                        <div style="font-size: 12px; color: #666;">Facebook, Twitter, Instagram, LinkedIn</div>
+                    </div>
+                    
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">⚡</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Productivity & Tools</div>
+                        <div style="font-size: 12px; color: #666;">Notion, Trello, Figma, Canva</div>
+                    </div>
+                    
+                    <div style="background: white; padding: 16px; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <div style="font-size: 24px; margin-bottom: 8px;">💰</div>
+                        <div style="font-weight: 600; margin-bottom: 4px;">Finance & Business</div>
+                        <div style="font-size: 12px; color: #666;">PayPal, Stripe, Bloomberg, MarketWatch</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="instructions">
+                <h3>🚀 How to Test Smart Categorization</h3>
+                <ul>
+                    <li><strong>Reload the Extension:</strong> Go to chrome://extensions/ and click the refresh button on TabOracle</li>
+                    <li><strong>Open the Popup:</strong> Click the TabOracle icon in your toolbar</li>
+                    <li><strong>Go to Category Search:</strong> Click the "Category Search" tab</li>
+                    <li><strong>See Smart Categories:</strong> Tabs are automatically categorized with confidence scores</li>
+                    <li><strong>Click Categories:</strong> See detailed breakdown with keywords and tab lists</li>
+                    <li><strong>Navigate to Tabs:</strong> Click on any tab to switch to it</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
