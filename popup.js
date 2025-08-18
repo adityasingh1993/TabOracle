@@ -60,6 +60,8 @@ class TabOraclePopup {
             await this.ensureLanguageModelInitialized();
             if (!this.languageModel || !this.languageModel.prompt) {
                 this.pageSummaryContent.innerHTML = `<div class="empty-state">AI not available on this device. Using fallback.</div>`;
+                if (this.geminiNotice) this.geminiNotice.style.display = 'flex';
+                chrome.tabs.create({ url: 'chrome://flags/#prompt-api-for-gemini-nano' });
                 return;
             }
             this.setSummaryLoading(true, 'Testing on-device AI...');
