@@ -44,7 +44,7 @@
     "_execute_action": {
       "suggested_key": {
         "default": "Ctrl+Space",
-        "mac": "Shift+Space"
+        "mac": "Alt+Space"
       },
       "description": "Open TabOracle Search"
     }
