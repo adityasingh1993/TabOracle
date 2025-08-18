@@ -1,462 +1,233 @@
-// Background service worker for TabOracle
+// TabOracle Background Service Worker
+// Manages tab lifecycle, data storage, and core logic
+
+// Global variables
 let allTabs = [];
-let tabContexts = new Map(); // Store enhanced context for each tab
-let wordEmbeddings = new Map(); // Store word vectors for semantic search
-let semanticModel = null; // NLP model for semantic understanding
-let contentIndex = new Map(); // Store page content for similarity search
+const tabContexts = new Map();
+let isInitializing = false;
 
-// Error handling wrapper
-function safeExecute(fn, context = 'unknown') {
-    try {
-        return fn();
-    } catch (error) {
-        console.error(`TabOracle Error in ${context}:`, error);
-        return null;
-    }
-}
-
-// Initialize with error handling
-console.log('🚀 TabOracle Background Service Worker Starting...');
-
-// Ensure we have a valid extension context
-if (typeof chrome === 'undefined' || !chrome.runtime) {
-    console.error('❌ TabOracle: Chrome runtime not available');
-    // Don't throw, just log and continue
-    console.log('⚠️ TabOracle: Continuing without Chrome runtime...');
-} else {
-    console.log('✅ TabOracle: Chrome runtime available');
-}
-
-// Verify we have required permissions
-if (!chrome.tabs || !chrome.storage || !chrome.scripting) {
-    console.error('❌ TabOracle: Required permissions not available');
-    // Don't throw, just log and continue
-    console.log('⚠️ TabOracle: Continuing without required permissions...');
-} else {
-    console.log('✅ TabOracle: Required permissions available');
-}
-
-// Initialize tabs when extension loads
-chrome.runtime.onStartup.addListener(() => {
-  console.log('🚀 TabOracle: Extension starting up...');
-  safeExecute(() => {
-    updateTabList();
-    initializeSemanticModel();
-  }, 'onStartup');
-});
-
-chrome.runtime.onInstalled.addListener((details) => {
-  console.log('🚀 TabOracle: Extension installed/updated:', details.reason);
-  safeExecute(() => {
-    updateTabList();
-    initializeSemanticModel();
-  }, 'onInstalled');
-});
-
-// Listen for tab updates
-chrome.tabs.onCreated.addListener((tab) => {
-  safeExecute(() => {
-    updateTabList();
-  }, 'tabCreated');
-});
-
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  safeExecute(() => {
-    if (changeInfo.status === 'complete' || changeInfo.title || changeInfo.url) {
-      updateTabList();
-      // Update context when tab content changes
-      if (changeInfo.status === 'complete') {
-        updateTabContext(tabId);
-        // Extract content from the page
-        extractTabContent(tabId, tab);
-      }
-    }
-  }, 'tabUpdated');
-});
-
-chrome.tabs.onRemoved.addListener((tabId) => {
-  safeExecute(() => {
-    updateTabList();
-    tabContexts.delete(tabId);
-    contentIndex.delete(tabId);
-  }, 'tabRemoved');
-});
-
-chrome.tabs.onMoved.addListener(() => {
-  safeExecute(() => {
-    updateTabList();
-  }, 'tabMoved');
-});
-
-// Extract content from a tab's web page
-async function extractTabContent(tabId, tab) {
+// Utility function to safely execute code with error handling
+function safeExecute(func, context) {
   try {
-    console.log(`TabOracle: Attempting to extract content for tab ${tabId}`);
-    
-    // Only extract content from http/https pages
-    if (!tab.url || !tab.url.startsWith('http')) {
-      console.log(`TabOracle: Skipping content extraction for non-HTTP tab: ${tab.url}`);
-      return;
-    }
-
-    console.log(`TabOracle: Injecting content script into tab ${tabId}`);
-    
-    // Inject content script to extract page content
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      function: extractPageContent
-    });
-
-    if (results && results[0] && results[0].result) {
-      const content = results[0].result;
-      contentIndex.set(tabId, content);
-      
-      // Update the tab context with content information
-      const context = tabContexts.get(tabId);
-      if (context) {
-        context.pageContent = content.text; // Use content.text instead of content.pageContent
-        context.contentKeywords = content.keywords;
-        context.contentSummary = content.summary;
-        context.lastContentUpdate = Date.now();
-        tabContexts.set(tabId, context);
-      }
-      
-      console.log(`TabOracle: Content extracted successfully for tab ${tabId} - ${content.keywords.length} keywords, ${content.text.length} characters`);
-    } else {
-      console.log(`TabOracle: No content result for tab ${tabId}`);
-    }
+    return func();
   } catch (error) {
-    // Some pages may not allow content extraction due to CORS or other restrictions
-    console.error(`TabOracle: Could not extract content for tab ${tabId}:`, error.message);
+    console.error(`❌ TabOracle ${context} error:`, error);
+    return null;
   }
 }
 
-// Content extraction function that runs in the page context
-function extractPageContent() {
-  try {
-    // Extract main content areas
-    const contentSelectors = [
-      'main', 'article', '.content', '.main-content', '.post-content', 
-      '.entry-content', '.article-content', '.page-content', '#content',
-      'section', '.section', '.container', '.wrapper'
-    ];
-    
-    let mainContent = '';
-    let allText = '';
-    
-    // Try to find main content areas first
-    for (const selector of contentSelectors) {
-      const elements = document.querySelectorAll(selector);
-      if (elements.length > 0) {
-        for (const element of elements) {
-          mainContent += element.textContent + ' ';
-        }
-        break;
-      }
-    }
-    
-    // Fallback to body content if no main content found
-    if (!mainContent.trim()) {
-      mainContent = document.body.textContent || '';
-    }
-    
-    // Get all text content for comprehensive indexing
-    allText = document.body.textContent || '';
-    
-    // Clean and process the text
-    const cleanText = cleanTextContent(mainContent || allText);
-    const keywords = extractContentKeywords(cleanText);
-    const summary = generateContentSummary(cleanText);
-    
-    return {
-      text: cleanText,
-      keywords: keywords,
-      summary: summary,
-      url: window.location.href,
-      title: document.title,
-      timestamp: Date.now()
-    };
-  } catch (error) {
-    return {
-      text: '',
-      keywords: [],
-      summary: '',
-      error: error.message
-    };
-  }
-}
-
-// Clean and normalize text content
-function cleanTextContent(text) {
-  return text
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .replace(/[^\w\s\-\.]/g, ' ') // Remove special characters
-    .replace(/\b\d+\b/g, ' ') // Remove standalone numbers
-    .replace(/\b\w{1,2}\b/g, ' ') // Remove very short words
-    .trim()
-    .toLowerCase();
-}
-
-// Extract meaningful keywords from content
-function extractContentKeywords(text) {
-  const words = text.split(/\s+/);
-  const wordCount = {};
-  const stopWords = new Set([
-    'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
-    'by', 'from', 'up', 'about', 'into', 'through', 'during', 'before',
-    'after', 'above', 'below', 'between', 'among', 'within', 'without',
-    'this', 'that', 'these', 'those', 'is', 'are', 'was', 'were', 'be',
-    'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
-    'would', 'could', 'should', 'may', 'might', 'can', 'must', 'shall'
-  ]);
-  
-  // Count word frequencies
-  words.forEach(word => {
-    if (word.length > 3 && !stopWords.has(word) && /^[a-zA-Z]+$/.test(word)) {
-      wordCount[word] = (wordCount[word] || 0) + 1;
-    }
+async function ensureOffscreenCreated() {
+  const page = await chrome.offscreen.hasDocument?.();
+  if (page) return;
+  await chrome.offscreen.createDocument({
+    url: 'offscreen.html',
+    reasons: ['BLOBS'],
+    justification: 'Parse PDFs with pdf.js in an offscreen document'
   });
-  
-  // Return top keywords by frequency
-  return Object.entries(wordCount)
-    .sort(([,a], [,b]) => b - a)
-    .slice(0, 50)
-    .map(([word]) => word);
 }
 
-// Generate a brief summary of the content
-function generateContentSummary(text) {
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
-  const summary = sentences.slice(0, 3).join('. ');
-  return summary.length > 200 ? summary.substring(0, 200) + '...' : summary;
-}
-
-// Initialize semantic NLP model
-async function initializeSemanticModel() {
+// Try to extract original PDF URL from Chrome PDF viewer URL
+function getOriginalPdfUrlFromViewer(viewerUrl) {
   try {
-    console.log('TabOracle: Initializing semantic model...');
-    // Load pre-trained word embeddings for semantic search
-    await loadWordEmbeddings();
-    console.log(`TabOracle: Semantic model initialized successfully with ${wordEmbeddings.size} word embeddings`);
-    
-    // Test semantic functionality
-    const testMatches = findSemanticMatches('development');
-    console.log(`TabOracle: Test semantic search for 'development': ${testMatches.length} matches found`);
-  } catch (error) {
-    console.error('TabOracle: Error initializing semantic model:', error);
-    console.log('TabOracle: Using fallback semantic search');
+    const url = new URL(viewerUrl);
+    const fileParam = url.searchParams.get('file');
+    if (!fileParam) return null;
+    return decodeURIComponent(fileParam);
+  } catch (_e) {
+    return null;
   }
 }
 
-// Load word embeddings for semantic search
-async function loadWordEmbeddings() {
-  // Common word embeddings for semantic search
-  const commonWords = [
-    // Development terms
-    'code', 'programming', 'developer', 'software', 'application', 'api', 'framework', 'library', 'database', 'server',
-    'git', 'github', 'gitlab', 'version', 'control', 'repository', 'commit', 'branch', 'merge', 'pull',
-    'stack', 'overflow', 'question', 'answer', 'error', 'bug', 'debug', 'test', 'deploy', 'production',
-    
-    // Documentation terms
-    'documentation', 'guide', 'tutorial', 'reference', 'manual', 'help', 'example', 'sample', 'getting', 'started',
-    'readme', 'wiki', 'docs', 'specification', 'requirements', 'architecture', 'design', 'pattern',
-    
-    // Communication terms
-    'email', 'mail', 'message', 'inbox', 'compose', 'draft', 'sent', 'attachment', 'thread', 'conversation',
-    'chat', 'message', 'notification', 'alert', 'reminder', 'calendar', 'schedule', 'meeting',
-    
-    // Media terms
-    'video', 'audio', 'stream', 'play', 'watch', 'listen', 'media', 'content', 'channel', 'playlist',
-    'youtube', 'vimeo', 'podcast', 'music', 'song', 'album', 'artist', 'genre',
-    
-    // News and information
-    'news', 'article', 'story', 'report', 'update', 'breaking', 'latest', 'headline', 'journalism', 'media',
-    'blog', 'post', 'publish', 'author', 'editor', 'reporter', 'journalist',
-    
-    // Shopping and commerce
-    'shopping', 'buy', 'purchase', 'cart', 'checkout', 'product', 'item', 'price', 'sale', 'discount',
-    'amazon', 'ebay', 'store', 'shop', 'marketplace', 'vendor', 'seller', 'buyer',
-    
-    // Social media
-    'social', 'post', 'share', 'like', 'comment', 'follow', 'friend', 'profile', 'timeline', 'feed',
-    'facebook', 'twitter', 'instagram', 'linkedin', 'network', 'community', 'group',
-    
-    // General web terms
-    'website', 'webpage', 'link', 'url', 'domain', 'browser', 'tab', 'window', 'search', 'find',
-    'home', 'about', 'contact', 'support', 'help', 'faq', 'terms', 'privacy', 'policy'
-  ];
-
-  // Create simple semantic vectors for common words
-  commonWords.forEach(word => {
-    const vector = createWordVector(word);
-    wordEmbeddings.set(word.toLowerCase(), vector);
-  });
-
-  // Create semantic relationships
-  createSemanticRelationships();
-}
-
-// Create a simple word vector representation
-function createWordVector(word) {
-  const vector = new Array(50).fill(0);
-  const hash = simpleHash(word);
-  
-  // Use hash to create pseudo-random but consistent vector
-  for (let i = 0; i < 50; i++) {
-    vector[i] = Math.sin(hash + i) * 0.5;
+// Very basic PDF text extraction (beta): grabs text inside parentheses, as many PDFs embed text this way
+function extractTextFromPdfBinary(arrayBuffer) {
+  try {
+    const decoder = new TextDecoder('latin1');
+    const raw = decoder.decode(new Uint8Array(arrayBuffer));
+    const matches = raw.match(/\((?:\\.|[^\\)])*\)/g);
+    if (matches && matches.length > 0) {
+      const text = matches
+        .slice(0, 2000) // cap number of matches processed
+        .map(s => s.slice(1, -1)
+          .replace(/\\\)/g, ')')
+          .replace(/\\\(/g, '(')
+          .replace(/\\n/g, ' ')
+          .replace(/\\r/g, ' ')
+          .replace(/\\t/g, ' ')
+        )
+        .join(' ');
+      return text.replace(/\s+/g, ' ').trim();
+    }
+    // Fallback: strip non-printable characters from raw
+    const cleaned = raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ' ');
+    return cleaned.slice(0, 20000);
+  } catch (_e) {
+    return '';
   }
-  
-  return vector;
 }
 
-// Simple hash function for consistent vector generation
-function simpleHash(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
+// Extract domain from URL
+function extractDomain(url) {
+  try {
+    return new URL(url).hostname.replace('www.', '');
+  } catch (e) {
+    return 'unknown';
   }
-  return Math.abs(hash);
 }
 
-// Create semantic relationships between related words
-function createSemanticRelationships() {
-  const relationships = {
-    'development': ['code', 'programming', 'developer', 'software', 'api', 'framework', 'git', 'github'],
-    'documentation': ['docs', 'guide', 'tutorial', 'reference', 'manual', 'help', 'readme'],
-    'communication': ['email', 'mail', 'message', 'chat', 'notification', 'calendar'],
-    'media': ['video', 'audio', 'stream', 'play', 'watch', 'youtube', 'music'],
-    'news': ['article', 'story', 'report', 'blog', 'post', 'journalism'],
-    'shopping': ['buy', 'purchase', 'cart', 'product', 'store', 'amazon'],
-    'social': ['post', 'share', 'like', 'comment', 'facebook', 'twitter', 'community']
+// Extract path from URL
+function extractPath(url) {
+  try {
+    return new URL(url).pathname;
+  } catch (e) {
+    return '/';
+  }
+}
+
+// ===== arXiv helpers =====
+function isArxivPdfUrl(url) {
+  return /https?:\/\/arxiv\.org\/pdf\//i.test(url);
+}
+
+function isArxivAbsUrl(url) {
+  return /https?:\/\/arxiv\.org\/abs\//i.test(url);
+}
+
+function extractArxivId(url) {
+  try {
+    // Match new-style IDs like 2305.10655 or 2305.10655v2
+    const m = url.match(/arxiv\.org\/(?:pdf|abs)\/([^\/\.#?]+)(?:\.pdf)?/i);
+    if (m && m[1]) return m[1];
+  } catch (_) {}
+  return null;
+}
+
+async function fetchArxivAbsContent(arxivId) {
+  const absUrl = `https://arxiv.org/abs/${arxivId}`;
+  const res = await fetch(absUrl, { credentials: 'include' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const html = await res.text();
+
+  // Try to extract using meta tags where possible
+  const getMeta = (name) => {
+    const re = new RegExp(`<meta[^>]+name=["']${name}["'][^>]+content=["']([^"']+)["']`, 'i');
+    const m = html.match(re);
+    return m ? m[1] : '';
   };
 
-  // Create semantic clusters
-  Object.entries(relationships).forEach(([category, words]) => {
-    words.forEach(word => {
-      if (wordEmbeddings.has(word)) {
-        const baseVector = wordEmbeddings.get(word);
-        const categoryVector = createWordVector(category);
-        
-        // Blend vectors to create semantic relationships
-        const blendedVector = baseVector.map((val, i) => 
-          (val + categoryVector[i]) / 2
-        );
-        
-        wordEmbeddings.set(word, blendedVector);
-      }
-    });
+  const title = getMeta('citation_title') || getMeta('og:title');
+  // Authors often have multiple meta tags; fall back to parsing author string
+  const authorsMatches = [...html.matchAll(/<meta[^>]+name=["']citation_author["'][^>]+content=["']([^"']+)["']/gi)];
+  const authors = authorsMatches.length > 0 ? authorsMatches.map(m => m[1]) : [];
+  let abstract = getMeta('citation_abstract') || getMeta('og:description');
+
+  if (!abstract) {
+    // Fallback: extract from blockquote
+    const blockRe = /<blockquote[^>]*class=["'][^"']*abstract[^"']*["'][^>]*>([\s\S]*?)<\/blockquote>/i;
+    const bm = html.match(blockRe);
+    if (bm && bm[1]) {
+      const text = bm[1].replace(/<[^>]+>/g, ' ');
+      abstract = text.replace(/\s+/g, ' ').trim();
+    }
+  }
+
+  const info = [
+    `Title: ${title || '(unknown)'}`,
+    authors.length ? `Authors: ${authors.join(', ')}` : '',
+    abstract ? `Abstract: ${abstract}` : ''
+  ].filter(Boolean).join('\n\n');
+
+  return { absUrl, title, authors, abstract, content: info };
+}
+
+// Capture PDF bytes via Chrome DevTools Protocol (debugger) as a fallback for CORS/auth-protected PDFs
+async function capturePdfViaDebugger(tabId, preferredUrl) {
+  return new Promise(async (resolve, reject) => {
+    const target = { tabId };
+    const version = '1.3';
+    let requestIdOfInterest = null;
+    let resolved = false;
+    const timeoutId = setTimeout(cleanupAndReject, 15000, new Error('Debugger PDF capture timeout'));
+
+    function cleanupAndReject(err) {
+      if (resolved) return;
+      resolved = true;
+      try { chrome.debugger.detach(target, () => resolve(Promise.reject(err))); } catch (_) {}
+      reject(err);
+    }
+
+    function safeResolve(value) {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timeoutId);
+      try { chrome.debugger.detach(target, () => resolve(value)); } catch (_) { resolve(value); }
+    }
+
+    try {
+      chrome.debugger.attach(target, version, () => {
+        if (chrome.runtime.lastError) return cleanupAndReject(new Error(chrome.runtime.lastError.message));
+
+        chrome.debugger.sendCommand(target, 'Network.enable', {}, () => {
+          if (chrome.runtime.lastError) return cleanupAndReject(new Error(chrome.runtime.lastError.message));
+
+          const onEvent = (source, method, params) => {
+            if (!params) return;
+            if (method === 'Network.responseReceived') {
+              const { requestId, response } = params;
+              const mime = (response && response.mimeType || '').toLowerCase();
+              const url = (response && response.url) || '';
+              const isPdf = mime.includes('application/pdf') || url.endsWith('.pdf');
+              const urlMatches = preferredUrl ? url === preferredUrl : false;
+              if (isPdf || urlMatches) {
+                requestIdOfInterest = requestId;
+              }
+            } else if (method === 'Network.loadingFinished' && requestIdOfInterest && params.requestId === requestIdOfInterest) {
+              chrome.debugger.sendCommand(target, 'Network.getResponseBody', { requestId: requestIdOfInterest }, (bodyResp) => {
+                if (chrome.runtime.lastError) return cleanupAndReject(new Error(chrome.runtime.lastError.message));
+                try {
+                  if (!bodyResp) return cleanupAndReject(new Error('No body response'));
+                  const { body, base64Encoded } = bodyResp;
+                  let bytes;
+                  if (base64Encoded) {
+                    const binary = atob(body);
+                    const len = binary.length;
+                    const arr = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) arr[i] = binary.charCodeAt(i);
+                    bytes = arr.buffer;
+                  } else {
+                    // Rare: try to interpret as UTF-8 and convert
+                    bytes = new TextEncoder().encode(body).buffer;
+                  }
+                  safeResolve(bytes);
+                } catch (e) {
+                  cleanupAndReject(e);
+                }
+              });
+            }
+          };
+
+          chrome.debugger.onEvent.addListener(onEvent);
+          // Also try to re-request the URL if provided, to ensure a fresh response under capture
+          if (preferredUrl) {
+            chrome.debugger.sendCommand(target, 'Page.navigate', { url: preferredUrl }, () => {
+              // ignore errors; we still may catch existing viewer loads
+            });
+          }
+
+          // If nothing captured, we rely on timeout to reject
+        });
+      });
+    } catch (e) {
+      cleanupAndReject(e);
+    }
   });
 }
 
-// Calculate semantic similarity between two words
-function calculateSemanticSimilarity(word1, word2) {
-  const vector1 = wordEmbeddings.get(word1.toLowerCase());
-  const vector2 = wordEmbeddings.get(word2.toLowerCase());
-  
-  if (!vector1 || !vector2) return 0;
-  
-  // Cosine similarity
-  let dotProduct = 0;
-  let norm1 = 0;
-  let norm2 = 0;
-  
-  for (let i = 0; i < vector1.length; i++) {
-    dotProduct += vector1[i] * vector2[i];
-    norm1 += vector1[i] * vector1[i];
-    norm2 += vector2[i] * vector2[i];
-  }
-  
-  if (norm1 === 0 || norm2 === 0) return 0;
-  
-  return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
-}
-
-// Find semantically similar words
-function findSemanticMatches(query, threshold = 0.3) {
-  try {
-    console.log(`TabOracle: Finding semantic matches for query: "${query}"`);
-    console.log(`TabOracle: Word embeddings available: ${wordEmbeddings.size}`);
-    
-    const matches = [];
-    const queryWords = extractKeywords(query);
-    console.log(`TabOracle: Query words extracted: ${queryWords.join(', ')}`);
-    
-    if (wordEmbeddings.size === 0) {
-      console.log('TabOracle: No word embeddings available, returning empty matches');
-      return [];
-    }
-    
-    for (const [word, vector] of wordEmbeddings) {
-      for (const queryWord of queryWords) {
-        const similarity = calculateSemanticSimilarity(queryWord, word);
-        if (similarity > threshold && !matches.some(m => m.word === word)) {
-          matches.push({ word, similarity, queryWord });
-        }
-      }
-    }
-    
-    console.log(`TabOracle: Found ${matches.length} semantic matches`);
-    // Sort by similarity score
-    return matches.sort((a, b) => b.similarity - a.similarity);
-  } catch (error) {
-    console.error('TabOracle: Error in findSemanticMatches:', error);
-    return [];
-  }
-}
-
-// Calculate content similarity between search query and page content
-function calculateContentSimilarity(query, tabContent) {
-  if (!tabContent || !tabContent.pageContent) return 0;
-  
-  const queryWords = extractKeywords(query);
-  const contentWords = tabContent.contentKeywords || [];
-  const contentText = tabContent.pageContent.toLowerCase();
-  
-  let similarity = 0;
-  let exactMatches = 0;
-  let semanticMatches = 0;
-  
-  // Check for exact word matches in content
-  queryWords.forEach(queryWord => {
-    if (contentWords.includes(queryWord)) {
-      exactMatches++;
-      similarity += 30; // High score for exact keyword matches
-    }
-    
-    // Check if word appears in the content text
-    if (contentText.includes(queryWord)) {
-      similarity += 20; // Good score for text presence
-    }
-  });
-  
-  // Check for semantic matches
-  const semanticMatchesForContent = findSemanticMatches(query);
-  semanticMatchesForContent.forEach(match => {
-    if (contentWords.includes(match.word)) {
-      similarity += match.similarity * 15; // Boost for semantic matches
-    }
-  });
-  
-  // Normalize by query length
-  if (queryWords.length > 0) {
-    similarity = similarity / queryWords.length;
-  }
-  
-  return Math.min(similarity, 100); // Cap at 100
-}
-
-// Update the list of all tabs with enhanced context
+// Update tab list with current tabs
 function updateTabList() {
   console.log('🔄 TabOracle: Updating tab list...');
   chrome.tabs.query({}, (tabs) => {
     console.log('🔄 TabOracle: Found', tabs.length, 'tabs');
-    
-    // Get unique window IDs
     const windowIds = [...new Set(tabs.map(tab => tab.windowId))];
-    
-    // Fetch window information for all windows
     chrome.windows.getAll({ populate: false }, (windows) => {
       const windowMap = {};
       windows.forEach(window => {
@@ -467,358 +238,162 @@ function updateTabList() {
           focused: window.focused
         };
       });
-      
       allTabs = tabs.map(tab => ({
-        id: tab.id,
-        title: tab.title || 'Untitled',
-        url: tab.url,
-        favIconUrl: tab.favIconUrl,
-        windowId: tab.windowId,
-        windowInfo: windowMap[tab.windowId] || { id: tab.windowId, title: `Window ${tab.windowId}` },
-        index: tab.index,
-        active: tab.active,
-        pinned: tab.pinned,
-        // Enhanced metadata for better context
-        domain: extractDomain(tab.url),
-        path: extractPath(tab.url),
-        lastAccessed: Date.now(),
-        contextScore: 0
+        id: tab.id, title: tab.title || 'Untitled', url: tab.url, favIconUrl: tab.favIconUrl,
+        windowId: tab.windowId, windowInfo: windowMap[tab.windowId] || { id: tab.windowId, title: `Window ${tab.windowId}` },
+        index: tab.index, active: tab.active, pinned: tab.pinned,
+        domain: extractDomain(tab.url), path: extractPath(tab.url), lastAccessed: Date.now(), contextScore: 0
       }));
-      
       console.log('🔄 TabOracle: Processed', allTabs.length, 'tabs');
       console.log('🔄 TabOracle: Sample tab:', allTabs[0]);
-      
-      // Store tabs in chrome.storage for persistence
       chrome.storage.local.set({ 'allTabs': allTabs });
-      
-      // Update contexts for all tabs
-      allTabs.forEach(tab => {
-        updateTabContext(tab.id);
-      });
+      allTabs.forEach(tab => { updateTabContext(tab.id); });
     });
   });
 }
 
-// Extract domain from URL for better context
-function extractDomain(url) {
-  try {
-    const urlObj = new URL(url);
-    return urlObj.hostname.replace('www.', '');
-  } catch {
-    return '';
-  }
-}
-
-// Extract path from URL for better context
-function extractPath(url) {
-  try {
-    const urlObj = new URL(url);
-    return urlObj.pathname;
-  } catch {
-    return '';
-  }
-}
-
-// Update context for a specific tab
-async function updateTabContext(tabId) {
-  try {
-    console.log(`🔄 TabOracle: Updating context for tab ${tabId}`);
-    
-    // Get tab content for better context analysis
-    const tab = allTabs.find(t => t.id === tabId);
-    if (!tab) {
-      console.log(`🔄 TabOracle: Tab ${tabId} not found in allTabs`);
+// Update tab context with content analysis
+function updateTabContext(tabId) {
+  chrome.tabs.get(tabId, (tab) => {
+    if (chrome.runtime.lastError) {
+      console.log('⚠️ TabOracle: Tab not found for context update:', tabId);
       return;
     }
-
-    // Try to get page content for context
-    const context = await getTabContext(tabId, tab);
-    tabContexts.set(tabId, context);
     
-    console.log(`🔄 TabOracle: Context updated for tab ${tabId}:`, context);
-    
-    // Update the tab with context information
-    const tabIndex = allTabs.findIndex(t => t.id === tabId);
-    if (tabIndex !== -1) {
-      allTabs[tabIndex] = { ...allTabs[tabIndex], ...context };
-    }
-  } catch (error) {
-    console.log('Could not update context for tab:', tabId, error);
-  }
-}
-
-// Get enhanced context for a tab
-async function getTabContext(tabId, tab) {
-  const context = {
-    keywords: [],
-    category: 'general',
-    relevance: 0,
-    lastUpdated: Date.now(),
-    semanticVector: null,
-    pageContent: null,
-    contentKeywords: [],
-    contentSummary: '',
-    lastContentUpdate: null
-  };
-
-  try {
-    // Extract keywords from title and URL
-    const titleWords = extractKeywords(tab.title);
-    const urlWords = extractKeywords(tab.url);
-    const domainWords = extractKeywords(tab.domain);
-    
-    context.keywords = [...new Set([...titleWords, ...urlWords, ...domainWords])];
-    
-    // Categorize tab based on domain and content
-    context.category = categorizeTab(tab);
-    
-    // Calculate base relevance score
-    context.relevance = calculateRelevance(tab, context);
-    
-    // Create semantic vector for the tab
-    context.semanticVector = createTabSemanticVector(context.keywords);
-    
-    // Get content information if available
-    const content = contentIndex.get(tabId);
-    if (content) {
-      context.pageContent = content.pageContent;
-      context.contentKeywords = content.keywords;
-      context.contentSummary = content.summary;
-      context.lastContentUpdate = content.timestamp;
-    }
-    
-  } catch (error) {
-    console.log('Error getting context for tab:', tabId, error);
-  }
-  
-  return context;
-}
-
-// Create semantic vector for a tab based on its keywords
-function createTabSemanticVector(keywords) {
-  const vector = new Array(50).fill(0);
-  let count = 0;
-  
-  keywords.forEach(keyword => {
-    const wordVector = wordEmbeddings.get(keyword.toLowerCase());
-    if (wordVector) {
-      for (let i = 0; i < vector.length; i++) {
-        vector[i] += wordVector[i];
-      }
-      count++;
-    }
-  });
-  
-  // Normalize the vector
-  if (count > 0) {
-    for (let i = 0; i < vector.length; i++) {
-      vector[i] /= count;
-    }
-  }
-  
-  return vector;
-}
-
-// Extract meaningful keywords from text
-function extractKeywords(text) {
-  if (!text) return [];
-  
-  return text
-    .toLowerCase()
-    .split(/[\s\-_\/\.]+/)
-    .filter(word => 
-      word.length > 2 && 
-      !isCommonWord(word) &&
-      /^[a-zA-Z0-9]+$/.test(word)
-    )
-    .slice(0, 10); // Limit to top 10 keywords
-}
-
-// Filter out common words
-function isCommonWord(word) {
-  const commonWords = [
-    'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
-    'by', 'from', 'up', 'about', 'into', 'through', 'during', 'before',
-    'after', 'above', 'below', 'between', 'among', 'within', 'without',
-    'http', 'https', 'www', 'com', 'org', 'net', 'edu', 'gov', 'io'
-  ];
-  return commonWords.includes(word);
-}
-
-// Categorize tab based on domain and content
-function categorizeTab(tab) {
-  const domain = tab.domain.toLowerCase();
-  
-  if (domain.includes('github') || domain.includes('gitlab')) return 'development';
-  if (domain.includes('stackoverflow') || domain.includes('stackexchange')) return 'development';
-  if (domain.includes('docs') || domain.includes('developer')) return 'documentation';
-  if (domain.includes('mail') || domain.includes('gmail') || domain.includes('outlook')) return 'email';
-  if (domain.includes('youtube') || domain.includes('vimeo')) return 'media';
-  if (domain.includes('news') || domain.includes('bbc') || domain.includes('cnn')) return 'news';
-  if (domain.includes('shopping') || domain.includes('amazon') || domain.includes('ebay')) return 'shopping';
-  if (domain.includes('social') || domain.includes('facebook') || domain.includes('twitter')) return 'social';
-  
-  return 'general';
-}
-
-// Calculate relevance score for a tab
-function calculateRelevance(tab, context) {
-  let score = 0;
-  
-  // Active tab gets bonus points
-  if (tab.active) score += 10;
-  
-  // Pinned tabs get bonus points
-  if (tab.pinned) score += 5;
-  
-  // More keywords = higher relevance potential
-  score += context.keywords.length * 2;
-  
-  // Content availability bonus
-  if (context.pageContent) score += 10;
-  if (context.contentKeywords && context.contentKeywords.length > 0) score += 5;
-  
-  // Category-specific bonuses
-  switch (context.category) {
-    case 'development': score += 3; break;
-    case 'documentation': score += 3; break;
-    case 'email': score += 2; break;
-    case 'news': score += 1; break;
-  }
-  
-  return score;
-}
-
-// Normal search function: basic text matching only
-function searchTabsNormal(query) {
-  const queryLower = query.toLowerCase();
-  const queryWords = extractKeywords(query);
-  
-  return allTabs.map(tab => {
-    const context = tabContexts.get(tab.id) || {};
-    let score = 0;
-    
-    // Exact matches get highest score
-    if (tab.title.toLowerCase().includes(queryLower)) score += 100;
-    if (tab.url.toLowerCase().includes(queryLower)) score += 80;
-    
-    // Domain match
-    if (tab.domain.toLowerCase().includes(queryLower)) score += 60;
-    
-    // Keyword matches
-    queryWords.forEach(queryWord => {
-      if (context.keywords.includes(queryWord)) score += 20;
-      if (tab.title.toLowerCase().includes(queryWord)) score += 15;
-      if (tab.url.toLowerCase().includes(queryWord)) score += 10;
-    });
-    
-    // Recency bonus
-    const ageInHours = (Date.now() - context.lastUpdated) / (1000 * 60 * 60);
-    if (ageInHours < 1) score += 5; // Very recent
-    else if (ageInHours < 24) score += 3; // Today
-    else if (ageInHours < 168) score += 1; // This week
-    
-    return { 
-      ...tab, 
-      searchScore: score, 
-      context: context,
-      semanticMatches: [],
-      contentSimilarity: 0
-    };
-  })
-  .filter(tab => tab.searchScore > 0)
-  .sort((a, b) => b.searchScore - a.searchScore);
-}
-
-// Enhanced search function with content-based similarity
-function searchTabsWithContext(query) {
-  const queryLower = query.toLowerCase();
-  const queryWords = extractKeywords(query);
-  
-  // Get semantic matches for the query
-  const semanticMatches = findSemanticMatches(query);
-  
-  return allTabs.map(tab => {
-    const context = tabContexts.get(tab.id) || {};
-    let score = 0;
-    
-    // Exact matches get highest score
-    if (tab.title.toLowerCase().includes(queryLower)) score += 100;
-    if (tab.url.toLowerCase().includes(queryLower)) score += 80;
-    
-    // Domain match
-    if (tab.domain.toLowerCase().includes(queryLower)) score += 60;
-    
-    // Keyword matches
-    queryWords.forEach(queryWord => {
-      if (context.keywords.includes(queryWord)) score += 20;
-      if (tab.title.toLowerCase().includes(queryWord)) score += 15;
-      if (tab.url.toLowerCase().includes(queryWord)) score += 10;
-    });
-    
-    // Content-based similarity scoring (NEW!)
-    if (context.pageContent) {
-      const contentSimilarity = calculateContentSimilarity(query, context);
-      score += contentSimilarity * 0.8; // Content similarity can add up to 80 points
-    }
-    
-    // Semantic similarity scoring
-    if (context.semanticVector && semanticMatches.length > 0) {
-      let semanticScore = 0;
-      semanticMatches.forEach(match => {
-        if (context.keywords.includes(match.word)) {
-          semanticScore += match.similarity * 25; // Boost semantic matches
+    if (tab.url && tab.url.startsWith('http') && !tab.url.startsWith('chrome://')) {
+      console.log('🔄 TabOracle: Updating context for tab:', tabId, tab.title);
+      
+      // Extract content from the tab
+      chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: () => {
+          const bodyText = document.body ? document.body.innerText || document.body.textContent : '';
+          const title = document.title || '';
+          const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, h5, h6'))
+            .map(h => h.textContent.trim()).filter(t => t.length > 0);
+          
+          return {
+            title: title,
+            bodyText: bodyText,
+            headings: headings,
+            url: window.location.href,
+            timestamp: Date.now()
+          };
         }
-        // Check semantic matches in content keywords
-        if (context.contentKeywords && context.contentKeywords.includes(match.word)) {
-          semanticScore += match.similarity * 30; // Higher boost for content matches
+      }, (results) => {
+        if (chrome.runtime.lastError) {
+          console.log('⚠️ TabOracle: Script injection failed for tab:', tabId, chrome.runtime.lastError.message);
+          return;
+        }
+        
+        if (results && results[0] && results[0].result) {
+          const content = results[0].result;
+          const pageContent = `${content.title}\n\n${content.headings.join('\n')}\n\n${content.bodyText}`;
+          
+          // Store context data
+          if (!tabContexts.has(tabId)) {
+            tabContexts.set(tabId, {});
+          }
+          
+          const context = tabContexts.get(tabId);
+          context.pageContent = pageContent;
+          context.title = content.title;
+          context.headings = content.headings;
+          context.url = content.url;
+          context.lastUpdated = content.timestamp;
+          
+          console.log('✅ TabOracle: Context updated for tab:', tabId, 'Content length:', pageContent.length);
         }
       });
-      score += semanticScore;
+    }
+  });
+}
+
+// Search tabs with normal text matching
+function searchTabsNormal(query) {
+  if (!query || query.trim() === '') return allTabs;
+  
+  const searchLower = query.toLowerCase();
+  const results = allTabs.map(tab => {
+    let score = 0;
+    let reasoning = '';
+    
+    // Title relevance
+    if (tab.title && tab.title.toLowerCase().includes(searchLower)) {
+      score += 50;
+      reasoning += 'Title match. ';
     }
     
-    // Category relevance
-    if (context.category !== 'general') {
-      const categoryKeywords = getCategoryKeywords(context.category);
-      if (categoryKeywords.some(keyword => queryLower.includes(keyword))) {
-        score += 25;
+    // URL relevance
+    if (tab.url && tab.url.toLowerCase().includes(searchLower)) {
+      score += 30;
+      reasoning += 'URL match. ';
+    }
+    
+    // Domain relevance
+    if (tab.domain && tab.domain.toLowerCase().includes(searchLower)) {
+      score += 25;
+      reasoning += 'Domain match. ';
+    }
+    
+    return { ...tab, contextScore: score, reasoning: reasoning || 'No direct matches found.' };
+  }).filter(tab => tab.contextScore > 0);
+  
+  return results.sort((a, b) => b.contextScore - a.contextScore);
+}
+
+// Search tabs with context awareness
+function searchTabsWithContext(query) {
+  if (!query || query.trim() === '') return allTabs;
+  
+  const searchLower = query.toLowerCase();
+  const results = allTabs.map(tab => {
+    let score = 0;
+    let reasoning = '';
+    
+    // Basic text matching
+    if (tab.title && tab.title.toLowerCase().includes(searchLower)) {
+      score += 40;
+      reasoning += 'Title match. ';
+    }
+    
+    if (tab.url && tab.url.toLowerCase().includes(searchLower)) {
+      score += 25;
+      reasoning += 'URL match. ';
+    }
+    
+    if (tab.domain && tab.domain.toLowerCase().includes(searchLower)) {
+      score += 20;
+      reasoning += 'Domain match. ';
+    }
+    
+    // Context-based scoring
+    const context = tabContexts.get(tab.id);
+    if (context && context.pageContent) {
+      const contentLower = context.pageContent.toLowerCase();
+      
+      if (contentLower.includes(searchLower)) {
+        score += 35;
+        reasoning += 'Content match. ';
+      }
+      
+      // Check for partial matches
+      const searchWords = searchLower.split(' ').filter(word => word.length > 2);
+      let wordMatches = 0;
+      searchWords.forEach(word => {
+        if (contentLower.includes(word)) wordMatches++;
+      });
+      
+      if (wordMatches > 0) {
+        score += wordMatches * 10;
+        reasoning += `${wordMatches} word matches. `;
       }
     }
     
-    // Recency bonus
-    const ageInHours = (Date.now() - context.lastUpdated) / (1000 * 60 * 60);
-    if (ageInHours < 1) score += 5; // Very recent
-    else if (ageInHours < 24) score += 3; // Today
-    else if (ageInHours < 168) score += 1; // This week
-    
-    return { 
-      ...tab, 
-      searchScore: score, 
-      context: context,
-      semanticMatches: semanticMatches.filter(match => 
-        context.keywords.includes(match.word) || 
-        (context.contentKeywords && context.contentKeywords.includes(match.word))
-      ),
-      contentSimilarity: context.pageContent ? calculateContentSimilarity(query, context) : 0
-    };
-  })
-  .filter(tab => tab.searchScore > 0)
-  .sort((a, b) => b.searchScore - a.searchScore);
-}
-
-// Get keywords associated with categories
-function getCategoryKeywords(category) {
-  const categoryMap = {
-    'development': ['code', 'programming', 'developer', 'git', 'api', 'framework', 'library'],
-    'documentation': ['docs', 'guide', 'tutorial', 'reference', 'manual', 'help'],
-    'email': ['mail', 'inbox', 'compose', 'draft', 'sent'],
-    'media': ['video', 'audio', 'stream', 'play', 'watch'],
-    'news': ['article', 'story', 'report', 'update', 'breaking'],
-    'shopping': ['buy', 'purchase', 'cart', 'checkout', 'product'],
-    'social': ['post', 'share', 'like', 'comment', 'follow']
-  };
+    return { ...tab, contextScore: score, reasoning: reasoning || 'Limited relevance.' };
+  }).filter(tab => tab.contextScore > 0);
   
-  return categoryMap[category] || [];
+  return results.sort((a, b) => b.contextScore - a.contextScore);
 }
 
 // Handle messages from content script or popup
@@ -835,30 +410,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   };
   
   try {
+    // Handle messages from popup and content scripts
+    // Ignore actions intended for the offscreen document so it can respond
+    if (request && (request.action === 'offscreenParsePdf' || request.action === 'offscreenParsePdfData')) {
+      console.log('📨 TabOracle: Offscreen action received in background, ignoring so offscreen can handle:', request.action);
+      return false;
+    }
+    
     if (request.action === 'getTabs') {
-      // Ensure allTabs is populated
-      if (allTabs.length === 0) {
-        updateTabList();
-      }
-      // Merge basic tab data with context data
-      const tabsWithContext = allTabs.map(tab => {
-        const context = tabContexts.get(tab.id) || {};
-        return { ...tab, context: context };
-      });
-      console.log('📊 TabOracle: Returning tabs with context for getTabs:', tabsWithContext.length);
-      sendSafeResponse({ tabs: tabsWithContext });
+        try {
+            console.log('📊 TabOracle: getTabs requested');
+            const tabsWithContext = allTabs.map(tab => ({ ...tab, context: tabContexts.get(tab.id) || {} }));
+            console.log('📊 TabOracle: Returning tabs with context:', tabsWithContext.length);
+            sendSafeResponse({ tabs: tabsWithContext });
+        } catch (error) {
+            console.error('❌ TabOracle: Error in getTabs:', error);
+            sendSafeResponse({ error: 'Failed to get tabs: ' + error.message });
+        }
     } else if (request.action === 'getAllTabs') {
-      // Ensure allTabs is populated
-      if (allTabs.length === 0) {
-        updateTabList();
-      }
-      // Merge basic tab data with context data
-      const tabsWithContext = allTabs.map(tab => {
-        const context = tabContexts.get(tab.id) || {};
-        return { ...tab, context: context };
-      });
-      console.log('📊 TabOracle: Returning tabs with context for getAllTabs:', tabsWithContext.length);
-      sendSafeResponse({ tabs: tabsWithContext });
+        try {
+            console.log('📊 TabOracle: getAllTabs requested');
+            const tabsWithContext = allTabs.map(tab => ({ ...tab, context: tabContexts.get(tab.id) || {} }));
+            console.log('📊 TabOracle: Returning tabs with context for getAllTabs:', tabsWithContext.length);
+            sendSafeResponse({ tabs: tabsWithContext });
+        } catch (error) {
+            console.error('❌ TabOracle: Error in getAllTabs:', error);
+            sendSafeResponse({ error: 'Failed to get all tabs: ' + error.message });
+        }
+    } else if (request.action === 'ping') {
+        // Simple ping handler for debugging
+        console.log('🏓 TabOracle: Ping received:', request.data);
+        sendSafeResponse({ 
+            pong: true, 
+            timestamp: Date.now(), 
+            data: request.data,
+            status: 'TabOracle is running'
+        });
     } else if (request.action === 'activateTab') {
       safeExecute(() => {
         chrome.tabs.update(request.tabId, { active: true });
@@ -881,15 +468,178 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.action === 'getTabContext') {
       const context = tabContexts.get(request.tabId);
       sendSafeResponse({ context: context || {} });
-    } else if (request.action === 'getSemanticMatches') {
-      const matches = safeExecute(() => findSemanticMatches(request.query), 'getSemanticMatches');
-      sendSafeResponse({ matches: (matches || []).slice(0, 10) });
     } else if (request.action === 'extractContent') {
       // Manual content extraction request
-      safeExecute(() => extractTabContent(request.tabId, { url: request.url }), 'extractContent');
+      safeExecute(() => updateTabContext(request.tabId), 'extractContent');
       sendSafeResponse({ success: true });
-    } else if (request.action === 'ping') {
-      sendSafeResponse({ status: 'ok', message: 'TabOracle is running' });
+    } else if (request.action === 'getGeminiStatus') {
+      // This will be handled by the popup, but we can provide basic status
+      sendSafeResponse({ 
+        status: 'ok', 
+        message: 'Gemini status check requested',
+        note: 'Check popup console for detailed Gemini status'
+      });
+    } else if (request.action === 'getPageContent') {
+      console.log('📝 TabOracle: Getting page content for tab:', request.tabId);
+      
+      // Check if this is a chrome:// URL which we can't access
+      chrome.tabs.get(request.tabId, (tab) => {
+        if (chrome.runtime.lastError) {
+          console.error('❌ TabOracle: Tab not found:', request.tabId);
+          sendSafeResponse({ 
+            success: false, 
+            error: 'Tab not found' 
+          });
+          return;
+        }
+        
+        if (tab.url && tab.url.startsWith('chrome://')) {
+          console.log('⚠️ TabOracle: Cannot access chrome:// URL:', tab.url);
+          sendSafeResponse({ 
+            success: false, 
+            error: 'Cannot access chrome:// URLs' 
+          });
+          return;
+        }
+        
+        // Try to handle PDFs opened in the Chrome viewer
+        // Prefer arXiv abstraction path for arXiv PDFs
+        if (tab.url && isArxivPdfUrl(tab.url)) {
+          const arxivId = extractArxivId(tab.url);
+          console.log('📝 TabOracle: Detected arXiv PDF, using /abs metadata for', arxivId);
+          (async () => {
+            try {
+              const meta = await fetchArxivAbsContent(arxivId);
+              sendSafeResponse({ success: true, content: meta.content, contentLength: meta.content.length, contentType: 'arxiv', meta });
+            } catch (e) {
+              console.warn('⚠️ TabOracle: arXiv /abs fetch failed, falling back to PDF parsing', e);
+              // Fall back to normal PDF handling below
+              const originalPdfUrl = `https://arxiv.org/pdf/${extractArxivId(tab.url)}.pdf`;
+              try {
+                let buf;
+                try {
+                  const res = await fetch(originalPdfUrl, { credentials: 'include' });
+                  if (!res.ok) throw new Error('HTTP ' + res.status);
+                  buf = await res.arrayBuffer();
+                } catch (fetchErr) {
+                  console.warn('⚠️ TabOracle: PDF fetch failed, trying debugger capture...', fetchErr);
+                  buf = await capturePdfViaDebugger(request.tabId, originalPdfUrl);
+                }
+                await ensureOffscreenCreated();
+                const resp = await chrome.runtime.sendMessage({ action: 'offscreenParsePdfData', data: buf });
+                if (resp && resp.success) {
+                  sendSafeResponse({ success: true, content: resp.content, contentLength: resp.contentLength, contentType: 'pdf' });
+                } else {
+                  sendSafeResponse({ success: false, error: resp?.error || 'Failed to parse PDF' });
+                }
+              } catch (e2) {
+                console.error('❌ TabOracle: arXiv PDF fallback failed:', e2);
+                sendSafeResponse({ success: false, error: e2.message });
+              }
+            }
+          })();
+          return true;
+        }
+
+        if (tab.url && (tab.url.startsWith('chrome-extension://') || tab.url.includes('/pdf/viewer') || tab.url.endsWith('.pdf'))) {
+          const originalPdfUrl = getOriginalPdfUrlFromViewer(tab.url) || tab.url;
+          console.log('📝 TabOracle: Detected PDF, downloading and parsing via offscreen:', originalPdfUrl);
+          (async () => {
+            try {
+              let buf;
+              try {
+                const res = await fetch(originalPdfUrl, { credentials: 'include' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                buf = await res.arrayBuffer();
+              } catch (fetchErr) {
+                console.warn('⚠️ TabOracle: PDF fetch failed', fetchErr);
+                // Only use debugger capture if user enabled
+                const cfg = await chrome.storage.local.get(['enablePdfDebugger']);
+                if (cfg && cfg.enablePdfDebugger) {
+                  console.warn('⚠️ TabOracle: Trying debugger capture per user setting...');
+                  buf = await capturePdfViaDebugger(request.tabId, originalPdfUrl);
+                } else {
+                  throw new Error('PDF fetch blocked and debugger capture disabled');
+                }
+              }
+
+              await ensureOffscreenCreated();
+              const resp = await chrome.runtime.sendMessage({ action: 'offscreenParsePdfData', data: buf });
+              if (resp && resp.success) {
+                sendSafeResponse({ success: true, content: resp.content, contentLength: resp.contentLength, contentType: 'pdf' });
+              } else {
+                sendSafeResponse({ success: false, error: resp?.error || 'Failed to parse PDF' });
+              }
+            } catch (e) {
+              console.error('❌ TabOracle: PDF download/parse failed:', e);
+              sendSafeResponse({ success: false, error: e.message });
+            }
+          })();
+          return true; // async response
+        }
+
+        // Get the tab context which contains the page content
+        const tabContext = tabContexts.get(request.tabId);
+        
+        if (tabContext && tabContext.pageContent) {
+          console.log('📝 TabOracle: Found page content, length:', tabContext.pageContent.length);
+          sendSafeResponse({ 
+            success: true, 
+            content: tabContext.pageContent,
+            contentLength: tabContext.pageContent.length
+          });
+        } else {
+          console.log('📝 TabOracle: No page content found, extracting now...');
+          
+          // Try to extract content from the tab
+          chrome.scripting.executeScript({
+            target: { tabId: request.tabId },
+            func: () => {
+              // Get page content
+              const bodyText = document.body ? document.body.innerText || document.body.textContent : '';
+              const title = document.title || '';
+              
+              // Combine title and body text
+              let content = title + '\n\n' + bodyText;
+              
+              // Clean up the content
+              content = content.replace(/\s+/g, ' ').trim();
+              
+              return content;
+            }
+          }, (results) => {
+            if (chrome.runtime.lastError) {
+              console.error('❌ TabOracle: Script injection failed:', chrome.runtime.lastError);
+              sendSafeResponse({ 
+                success: false, 
+                error: 'Failed to inject script: ' + chrome.runtime.lastError.message 
+              });
+            } else if (results && results[0] && results[0].result) {
+              const content = results[0].result;
+              console.log('📝 TabOracle: Successfully extracted content, length:', content.length);
+              
+              // Store the content in tab context for future use
+              if (!tabContexts.has(request.tabId)) {
+                tabContexts.set(request.tabId, {});
+              }
+              tabContexts.get(request.tabId).pageContent = content;
+              
+              sendSafeResponse({ 
+                success: true, 
+                content: content,
+                contentLength: content.length
+              });
+            } else {
+              sendSafeResponse({ 
+                success: false, 
+                error: 'No content extracted from page' 
+              });
+            }
+          });
+        }
+      });
+      
+      return true; // Keep message channel open for async response
     } else {
       // Unknown action
       sendSafeResponse({ error: 'Unknown action: ' + request.action });
@@ -925,3 +675,54 @@ self.addEventListener('unhandledrejection', (event) => {
 safeExecute(() => {
   updateTabList();
 }, 'initialUpdate');
+
+// Listen for tab updates to keep allTabs synchronized
+chrome.tabs.onCreated.addListener((tab) => {
+  safeExecute(() => {
+    console.log('🔄 TabOracle: Tab created:', tab.id, tab.title);
+    updateTabList();
+  }, 'tabCreated');
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  safeExecute(() => {
+    if (changeInfo.status === 'complete' || changeInfo.title || changeInfo.url) {
+      console.log('🔄 TabOracle: Tab updated:', tabId, changeInfo);
+      updateTabList();
+      // Update context when tab content changes
+      if (changeInfo.status === 'complete') {
+        updateTabContext(tabId);
+      }
+    }
+  }, 'tabUpdated');
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  safeExecute(() => {
+    console.log('🔄 TabOracle: Tab removed:', tabId);
+    updateTabList();
+    tabContexts.delete(tabId);
+  }, 'tabRemoved');
+});
+
+chrome.tabs.onMoved.addListener(() => {
+  safeExecute(() => {
+    console.log('🔄 TabOracle: Tab moved, updating list');
+    updateTabList();
+  }, 'tabMoved');
+});
+
+// Listen for extension startup and installation
+chrome.runtime.onStartup.addListener(() => {
+  console.log('🚀 TabOracle: Extension starting up...');
+  safeExecute(() => {
+    updateTabList();
+  }, 'onStartup');
+});
+
+chrome.runtime.onInstalled.addListener((details) => {
+  console.log('🚀 TabOracle: Extension installed/updated:', details.reason);
+  safeExecute(() => {
+    updateTabList();
+  }, 'onInstalled');
+});

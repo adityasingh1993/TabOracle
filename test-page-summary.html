@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabOracle Page Summary Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.5em;
+        }
+        .header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            border-left: 4px solid #007bff;
+        }
+        .section h2 {
+            color: #007bff;
+            margin-top: 0;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .feature-list li::before {
+            content: "✅";
+            font-size: 1.2em;
+        }
+        .test-instructions {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .test-instructions h3 {
+            color: #0056b3;
+            margin-top: 0;
+        }
+        .test-instructions ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .test-instructions li {
+            margin: 10px 0;
+        }
+        .content-sample {
+            background: #f1f3f4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            border-left: 4px solid #28a745;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .emoji {
+            font-size: 1.2em;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📝 TabOracle Page Summary Test</h1>
+        <p>Test the new AI-powered page summary functionality</p>
+    </div>
+
+    <div class="section">
+        <h2>🚀 New Feature: Page Summary Tab</h2>
+        <p>TabOracle now includes a <strong>Page Summary</strong> tab that uses Gemini Nano to generate intelligent summaries of any web page you're viewing.</p>
+        
+        <ul class="feature-list">
+            <li><strong>AI-Powered Analysis:</strong> Uses Chrome's built-in Language Model for intelligent content understanding</li>
+            <li><strong>Comprehensive Summaries:</strong> Extracts main topics, key points, and content statistics</li>
+            <li><strong>Smart Content Detection:</strong> Automatically identifies content type (article, documentation, news, product)</li>
+            <li><strong>Reading Time Estimation:</strong> Calculates how long it takes to read the content</li>
+            <li><strong>Fallback Support:</strong> Traditional NLP methods when AI isn't available</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>🧠 How Page Summary Works</h2>
+        
+        <h3>1. Content Extraction</h3>
+        <p>TabOracle extracts the full text content from the current page, including:</p>
+        <ul>
+            <li>Page title and headings</li>
+            <li>Main body text content</li>
+            <li>Meta information</li>
+        </ul>
+
+        <h3>2. AI Analysis</h3>
+        <p>Gemini Nano analyzes the content to:</p>
+        <ul>
+            <li>Identify the main topic and purpose</li>
+            <li>Extract key information points</li>
+            <li>Determine content type and relevance</li>
+            <li>Generate a concise summary</li>
+        </ul>
+
+        <h3>3. Smart Fallback</h3>
+        <p>When AI isn't available, traditional NLP methods provide:</p>
+        <ul>
+            <li>TF-IDF based content analysis</li>
+            <li>Bigram and trigram matching</li>
+            <li>Word frequency analysis</li>
+            <li>Content type detection</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>📋 What You'll See</h2>
+        
+        <div class="content-sample">
+            <strong>Summary:</strong> This page demonstrates TabOracle's new Page Summary functionality, which uses AI to analyze web content and generate intelligent summaries with key points and statistics.
+            
+            <strong>Main Topic:</strong> TabOracle Page Summary Feature
+            
+            <strong>Key Points:</strong>
+            • AI-powered content analysis
+            • Comprehensive page summaries  
+            • Smart content type detection
+            • Reading time estimation
+            • Traditional NLP fallback
+            
+            <strong>Content Type:</strong> Documentation
+            
+            <strong>Statistics:</strong>
+            • Words: ~500
+            • Reading Time: 2 minutes
+            • Confidence: 95%
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>🧪 Testing Instructions</h2>
+        
+        <div class="test-instructions">
+            <h3>Step 1: Open TabOracle</h3>
+            <ol>
+                <li>Click the <span class="highlight">TabOracle icon</span> in your Chrome toolbar</li>
+                <li>Or press <span class="highlight">Ctrl+Space</span> to open the search</li>
+            </ol>
+
+            <h3>Step 2: Navigate to Page Summary Tab</h3>
+            <ol>
+                <li>Click the <span class="highlight">📝 Page Summary</span> tab</li>
+                <li>You should see the summary interface</li>
+            </ol>
+
+            <h3>Step 3: Generate Summary</h3>
+            <ol>
+                <li>Click the <span class="highlight">Generate Summary</span> button</li>
+                <li>Watch the loading animation</li>
+                <li>View the AI-generated summary</li>
+            </ol>
+
+            <h3>Step 4: Check Console Logs</h3>
+            <ol>
+                <li>Open Chrome DevTools (F12)</li>
+                <li>Go to Console tab</li>
+                <li>Look for TabOracle logs with 📝 emoji</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>🔍 Expected Console Output</h2>
+        
+        <div class="content-sample">
+📝 TabOracle: Generating page summary...
+🧠 TabOracle: Using Gemini Nano for page summary...
+🧠 TabOracle: Page summary response received: [AI response]
+✅ TabOracle: Page summary generated successfully
+        </div>
+        
+        <p><strong>Note:</strong> If you see "Gemini Nano not available" messages, the extension will fall back to traditional NLP methods.</p>
+    </div>
+
+    <div class="section">
+        <h2>🎯 Test Scenarios</h2>
+        
+        <h3>✅ What Should Work</h3>
+        <ul>
+            <li>Page Summary tab appears and is clickable</li>
+            <li>Generate Summary button responds to clicks</li>
+            <li>Loading animation shows during generation</li>
+            <li>Summary content displays with proper formatting</li>
+            <li>Console logs show the generation process</li>
+        </ul>
+
+        <h3>⚠️ Potential Issues</h3>
+        <ul>
+            <li>If Gemini Nano isn't available, fallback methods will be used</li>
+            <li>Some pages may have restricted content extraction</li>
+            <li>Very long pages may take longer to process</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>🚀 Next Steps</h2>
+        
+        <p>Once you've tested the Page Summary functionality:</p>
+        <ol>
+            <li><strong>Try different types of pages:</strong> News articles, documentation, product pages</li>
+            <li><strong>Compare AI vs Fallback:</strong> See the difference between Gemini Nano and traditional NLP</li>
+            <li><strong>Test performance:</strong> Notice how fast the summaries are generated</li>
+            <li><strong>Check accuracy:</strong> Verify that the summaries capture the main points</li>
+        </ol>
+        
+        <p><strong>Ready to test?</strong> Open TabOracle now and try the new Page Summary tab! 🎉</p>
+    </div>
+
+    <script>
+        // Add some interactive elements
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📝 TabOracle Page Summary Test Page Loaded');
+            console.log('🧪 Ready to test the new Page Summary functionality!');
+            
+            // Add click tracking for features
+            document.querySelectorAll('.feature-list li').forEach(item => {
+                item.addEventListener('click', function() {
+                    this.style.background = '#e7f3ff';
+                    setTimeout(() => {
+                        this.style.background = 'white';
+                    }, 200);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

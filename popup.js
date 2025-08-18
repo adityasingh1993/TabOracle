@@ -5,13 +5,192 @@ class TabOraclePopup {
         this.currentTab = 'normal';
         this.initializeElements();
         this.setupEventListeners();
+        // Ensure the default tab content is visible on load
+        this.switchTab('normalSearchTab');
+        this.fixPopupHeight();
+        window.addEventListener('resize', () => this.fixPopupHeight());
         this.loadTabs();
     }
 
+    async ensureLanguageModelInitialized() {
+        if (this.languageModelInitialized) return;
+        try {
+            if (typeof LanguageModel !== 'undefined' && LanguageModel.create) {
+                this.languageModel = await LanguageModel.create();
+                this.languageModelInitialized = true;
+                console.log('✅ TabOracle: Language model initialized');
+            } else if (typeof chrome !== 'undefined' && chrome.languageModel && chrome.languageModel.create) {
+                this.languageModel = await chrome.languageModel.create();
+                this.languageModelInitialized = true;
+                console.log('✅ TabOracle: chrome.languageModel initialized');
+            } else if (typeof window !== 'undefined' && window.LanguageModel && window.LanguageModel.create) {
+                this.languageModel = await window.LanguageModel.create();
+                this.languageModelInitialized = true;
+                console.log('✅ TabOracle: window.LanguageModel initialized');
+            } else {
+                console.log('⚠️ TabOracle: On-device language model not available; will use fallback');
+            }
+        } catch (e) {
+            console.warn('⚠️ TabOracle: Language model init failed, using fallback', e);
+            this.languageModel = null;
+            this.languageModelInitialized = false;
+        }
+    }
+
+    setSummaryLoading(isLoading, message = 'Generating summary...') {
+        if (!this.pageSummaryContent) return;
+        if (isLoading) {
+            this.pageSummaryContent.classList.add('loading');
+            this.pageSummaryContent.innerHTML = `
+                <div class="ai-search-loading">
+                    <div class="loading-spinner">✨</div>
+                    <div class="loading-text">${this.escapeHtml(message)}</div>
+                    <div class="loading-subtext">Please wait while we analyze the page</div>
+                </div>
+            `;
+        } else {
+            this.pageSummaryContent.classList.remove('loading');
+        }
+    }
+
+    async handleTestLanguageModel() {
+        try {
+            await this.ensureLanguageModelInitialized();
+            if (!this.languageModel || !this.languageModel.prompt) {
+                this.pageSummaryContent.innerHTML = `<div class="empty-state">AI not available on this device. Using fallback.</div>`;
+                return;
+            }
+            this.setSummaryLoading(true, 'Testing on-device AI...');
+            const response = await this.languageModel.prompt('Say "Hello, TabOracle is working!"');
+            const text = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+            this.setSummaryLoading(false);
+            this.pageSummaryContent.innerHTML = `
+                <div class="summary-text">${this.escapeHtml(text)}</div>
+            `;
+        } catch (error) {
+            console.error('❌ TabOracle: Test AI failed:', error);
+            this.setSummaryLoading(false);
+            this.pageSummaryContent.innerHTML = `<div class="empty-state error">AI test failed: ${this.escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    async handleGenerateSummary() {
+        try {
+            this.setSummaryLoading(true);
+
+            // Get active tab id
+            const activeTab = await new Promise((resolve) => {
+                try {
+                    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs && tabs[0]));
+                } catch (_e) { resolve(null); }
+            });
+
+            if (!activeTab) {
+                this.setSummaryLoading(false);
+                this.pageSummaryContent.innerHTML = `<div class="empty-state error">Cannot detect active tab.</div>`;
+                return;
+            }
+
+            // Get page content via background (handles chrome:// restrictions and caching)
+            let contentResp = await chrome.runtime.sendMessage({ action: 'getPageContent', tabId: activeTab.id });
+            if (!contentResp || !contentResp.success) {
+                // Fallback: request background to extract then retry
+                try {
+                    await chrome.runtime.sendMessage({ action: 'extractContent', tabId: activeTab.id });
+                    contentResp = await chrome.runtime.sendMessage({ action: 'getPageContent', tabId: activeTab.id });
+                } catch (_e) {}
+            }
+            if (!contentResp || !contentResp.success) {
+                this.setSummaryLoading(false);
+                this.pageSummaryContent.innerHTML = `<div class="empty-state error">${this.escapeHtml(contentResp?.error || 'Unable to get page content')}</div>`;
+                return;
+            }
+
+            const pageContent = contentResp.content || '';
+            const pageTitle = activeTab.title || '';
+            const pageUrl = activeTab.url || '';
+
+            // Try on-device model first
+            await this.ensureLanguageModelInitialized();
+            let summaryData = null;
+            if (this.languageModel && this.languageModel.prompt) {
+                const prompt = `Return ONLY valid JSON. Summarize page with keys: summary, mainTopic, keyPoints, contentType, wordCount, estimatedReadingTime, confidence.\nTitle: ${pageTitle}\nURL: ${pageUrl}\nContent: ${pageContent.substring(0, 8000)}`;
+                const response = await this.languageModel.prompt(prompt);
+                const raw = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                summaryData = this.parseAIJsonSafely(raw);
+            }
+
+            // Fallback if AI not available or parsing failed
+            if (!summaryData) {
+                summaryData = this.basicFallbackSummary(pageContent, pageTitle);
+            }
+
+            this.setSummaryLoading(false);
+            this.renderSummary(summaryData);
+        } catch (error) {
+            console.error('❌ TabOracle: Generate summary failed:', error);
+            this.setSummaryLoading(false);
+            this.pageSummaryContent.innerHTML = `<div class="empty-state error">Summary failed: ${this.escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    parseAIJsonSafely(text) {
+        if (!text) return null;
+        try {
+            const match = String(text).match(/\{[\s\S]*\}/);
+            if (match) {
+                try { return JSON.parse(match[0]); } catch (_e) {}
+                const cleaned = match[0].replace(/[^\x20-\x7E]/g, '').replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+                return JSON.parse(cleaned);
+            }
+            return JSON.parse(String(text));
+        } catch (_e) {
+            return null;
+        }
+    }
+
+    basicFallbackSummary(pageContent, pageTitle) {
+        const words = (pageContent || '').split(/\s+/).filter(w => w.length > 2);
+        const wordCount = words.length;
+        const minutes = Math.max(1, Math.ceil(wordCount / 225));
+        const summary = `This page titled "${pageTitle || 'Untitled'}" contains ${wordCount} words. Estimated reading time: ${minutes} minute${minutes !== 1 ? 's' : ''}.`;
+        return {
+            summary,
+            mainTopic: pageTitle || 'This page',
+            keyPoints: [],
+            contentType: 'other',
+            wordCount,
+            estimatedReadingTime: `${minutes} minute${minutes !== 1 ? 's' : ''}`,
+            confidence: 0.5
+        };
+    }
+
+    renderSummary(data) {
+        if (!this.pageSummaryContent) return;
+        if (!data) {
+            this.pageSummaryContent.innerHTML = `<div class="empty-state error">No summary available.</div>`;
+            return;
+        }
+        const keyPoints = (data.keyPoints || []).slice(0, 5).map(p => `<li>${this.escapeHtml(String(p))}</li>`).join('');
+        const numericWordCount = Number(data.wordCount) || (data.summary ? data.summary.trim().split(/\s+/).length : 0);
+        const minutes = numericWordCount ? Math.max(1, Math.ceil(numericWordCount / 225)) : null;
+        const metaBits = [];
+        if (numericWordCount) metaBits.push(`Words: ${numericWordCount}`);
+        if (minutes) metaBits.push(`Read time: ${minutes} min`);
+        if (data.contentType) metaBits.push(`Type: ${this.escapeHtml(String(data.contentType))}`);
+        if (typeof data.confidence === 'number') metaBits.push(`Confidence: ${Math.round(data.confidence * 100)}%`);
+        const metaHtml = metaBits.length ? `<div class="summary-meta">${metaBits.join(' • ')}</div>` : '';
+
+        this.pageSummaryContent.innerHTML = `
+            ${metaHtml}
+            <div class="summary-text">${this.escapeHtml(data.summary || '')}</div>
+            ${keyPoints ? `<div class="ai-result"><div class="ai-result-header"><div class="ai-result-content"><div class="ai-result-title">Key points</div><ul>${keyPoints}</ul></div></div></div>` : ''}
+        `;
+    }
     initializeElements() {
         // Tab elements
-        this.searchTabs = document.querySelectorAll('.search-tab');
-        this.tabContents = document.querySelectorAll('.tab-content');
+        this.searchTabs = document.querySelectorAll('.nav-tab');
+        this.tabContents = document.querySelectorAll('.tab-panel');
         
         // Normal search elements
         this.searchInput = document.getElementById('searchInput');
@@ -26,61 +205,135 @@ class TabOraclePopup {
         this.smartSearchInput = document.getElementById('smartSearchInput');
         this.smartSearchResults = document.getElementById('smartSearchResults');
         
+        // Page summary elements
+        this.generateSummaryButton = document.getElementById('generateSummary');
+        this.testLanguageModelButton = document.getElementById('testLanguageModel');
+        this.pageSummaryContent = document.getElementById('pageSummaryContent');
+        this.enablePdfDebuggerToggle = document.getElementById('enablePdfDebugger');
+        this.languageModel = null;
+        this.languageModelInitialized = false;
+        
         // Footer
         this.tabCount = document.getElementById('tabCount');
     }
 
-    setupEventListeners() {
-        // Tab switching
-        this.searchTabs.forEach(tab => {
-            tab.addEventListener('click', () => this.switchTab(tab.dataset.tab));
-        });
-
-        // Normal search
-        this.searchInput.addEventListener('input', (e) => this.handleNormalSearch(e.target.value));
-        
-        // Smart search
-        this.smartSearchInput.addEventListener('input', (e) => this.handleSmartSearch(e.target.value));
-        
-        // Category selection
-        this.categoriesGrid.addEventListener('click', (e) => {
-            if (e.target.closest('.category-card')) {
-                const category = e.target.closest('.category-card').dataset.category;
-                this.showCategoryResults(category);
+    fixPopupHeight() {
+        try {
+            const targetHeight = Math.max(900, window.innerHeight || 0);
+            document.body.style.height = `${targetHeight}px`;
+            const app = document.querySelector('.app-container');
+            if (app) {
+                app.style.height = `${targetHeight}px`;
             }
-        });
-        
-        // Debug button
-        const debugButton = document.getElementById('debugCategories');
-        if (debugButton) {
-            debugButton.addEventListener('click', () => this.debugCategories());
+        } catch (_e) {
+            // no-op; best effort sizing
         }
     }
 
+    setupEventListeners() {
+        console.log('🎯 TabOracle: Setting up event listeners...');
+        
+        // Tab switching
+        console.log('🎯 TabOracle: Found', this.searchTabs.length, 'tab elements');
+        this.searchTabs.forEach((tab, index) => {
+            console.log(`🎯 TabOracle: Binding click to tab ${index}:`, tab.dataset.tab);
+            tab.addEventListener('click', () => {
+                console.log('🎯 TabOracle: Tab clicked:', tab.dataset.tab);
+                this.switchTab(tab.dataset.tab);
+            });
+        });
+
+        // Normal search
+        if (this.searchInput) {
+            this.searchInput.addEventListener('input', (e) => this.handleNormalSearch(e.target.value));
+        }
+        
+        // Smart search
+        if (this.smartSearchInput) {
+            this.smartSearchInput.addEventListener('input', (e) => this.handleSmartSearch(e.target.value));
+        }
+        
+        // Category selection
+        if (this.categoriesGrid) {
+            this.categoriesGrid.addEventListener('click', (e) => {
+                if (e.target.closest('.category-card')) {
+                    const category = e.target.closest('.category-card').dataset.category;
+                    this.showCategoryResults(category);
+                }
+            });
+        }
+        
+        // Debug button (removed)
+        
+        // Back to categories button (will be added dynamically)
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'backToCategoriesBtn') {
+                this.goBackToCategories();
+            }
+        });
+        
+        // Page summary actions
+        if (this.testLanguageModelButton) {
+            this.testLanguageModelButton.addEventListener('click', () => this.handleTestLanguageModel());
+        }
+        if (this.generateSummaryButton) {
+            this.generateSummaryButton.addEventListener('click', () => this.handleGenerateSummary());
+        }
+        if (this.enablePdfDebuggerToggle) {
+            chrome.storage.local.get(['enablePdfDebugger'], (cfg) => {
+                const enabled = !!cfg.enablePdfDebugger;
+                this.enablePdfDebuggerToggle.checked = enabled;
+            });
+            this.enablePdfDebuggerToggle.addEventListener('change', () => {
+                chrome.storage.local.set({ enablePdfDebugger: this.enablePdfDebuggerToggle.checked });
+            });
+        }
+        
+        console.log('🎯 TabOracle: Event listeners setup complete');
+    }
+
     switchTab(tabName) {
+        console.log('🔄 TabOracle: Switching to tab:', tabName);
+        
         // Update active tab button
         this.searchTabs.forEach(tab => {
-            tab.classList.toggle('active', tab.dataset.tab === tabName);
+            const isActive = tab.dataset.tab === tabName;
+            tab.classList.toggle('active', isActive);
+            console.log(`🔄 TabOracle: Tab ${tab.dataset.tab} active:`, isActive);
         });
 
         // Update active tab content
         this.tabContents.forEach(content => {
-            content.classList.toggle('active', content.id === `${tabName}SearchTab`);
+            const shouldShow = content.id === tabName;
+            content.style.display = shouldShow ? 'flex' : 'none';
+            console.log(`🔄 TabOracle: Panel ${content.id} display:`, shouldShow ? 'flex' : 'none');
         });
 
         this.currentTab = tabName;
         
         // Load appropriate content
         switch(tabName) {
-            case 'normal':
+            case 'normalSearchTab':
+                console.log('🔄 TabOracle: Loading normal search content');
+                // Ensure the all-tabs view is visible by default
+                if (this.tabsList) this.tabsList.style.display = 'block';
+                if (this.searchResults) this.searchResults.style.display = 'none';
                 this.loadTabs();
                 break;
-            case 'category':
+            case 'categorySearchTab':
+                console.log('🔄 TabOracle: Loading category content');
                 this.loadCategories();
                 break;
-            case 'smart':
+            case 'smartSearchTab':
+                console.log('🔄 TabOracle: Loading smart search content');
                 this.loadSmartSearch();
                 break;
+            case 'pageSummaryTab':
+                console.log('🔄 TabOracle: Page summary tab ready');
+                this.ensureLanguageModelInitialized();
+                break;
+            default:
+                console.log('🔄 TabOracle: Unknown tab:', tabName);
         }
     }
 
@@ -89,7 +342,7 @@ class TabOraclePopup {
             console.log('🔍 TabOracle: Loading tabs...');
             const response = await chrome.runtime.sendMessage({ action: 'getAllTabs' });
             console.log('🔍 TabOracle: Response received:', response);
-            this.allTabs = response.tabs || [];
+            this.allTabs = (response && response.tabs) ? response.tabs : [];
             console.log('🔍 TabOracle: Tabs loaded:', this.allTabs.length);
             this.renderTabs(this.allTabs);
             this.updateTabCount();
@@ -619,7 +872,7 @@ class TabOraclePopup {
                     <span class="stat-item">🔑 Keywords: ${uniqueKeywords.length}</span>
                     <span class="stat-item">📊 Smart Categorized</span>
                 </div>
-                <button class="back-button" onclick="this.closest('.category-results').style.display='none'">← Back to Categories</button>
+                <button class="back-button" id="backToCategoriesBtn">← Back to Categories</button>
             </div>
             
             ${uniqueKeywords.length > 0 ? `
@@ -636,8 +889,23 @@ class TabOraclePopup {
             </div>
         `;
 
+        // Hide categories grid and show results
+        this.categoriesGrid.style.display = 'none';
         this.categoryResults.style.display = 'block';
+        console.log('🔄 TabOracle: Categories grid display:', this.categoriesGrid.style.display);
+        console.log('🔄 TabOracle: Category results display:', this.categoryResults.style.display);
+        console.log('🔄 TabOracle: Category results height:', this.categoryResults.offsetHeight);
+        console.log('🔄 TabOracle: Tabs list found:', this.categoryResults.querySelector('.tabs-list'));
         this.addTabClickListeners(this.categoryResults);
+    }
+
+    goBackToCategories() {
+        console.log('🔄 TabOracle: Going back to categories');
+        // Show categories grid and hide results
+        this.categoriesGrid.style.display = 'grid';
+        this.categoryResults.style.display = 'none';
+        console.log('🔄 TabOracle: Categories grid display:', this.categoriesGrid.style.display);
+        console.log('🔄 TabOracle: Category results display:', this.categoryResults.style.display);
     }
 
     handleNormalSearch(query) {
@@ -772,12 +1040,12 @@ class TabOraclePopup {
     createTabElement(tab) {
         const isActive = tab.active;
         const isPinned = tab.pinned;
-        const favicon = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23ccc"/></svg>';
+        const favicon = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="#ccc"/></svg>';
         const category = this.getCategoryDisplay(tab);
         
         return `
             <div class="tab-item ${isActive ? 'active' : ''} ${isPinned ? 'pinned' : ''}" data-tab-id="${tab.id}" data-window-id="${tab.windowId}">
-                <img class="tab-favicon" src="${favicon}" alt="favicon" onerror="this.src='data:image/svg+xml,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 16 16&quot;><rect width=&quot;16&quot; height=&quot;16&quot; fill=&quot;%23ccc&quot;/></svg>'">
+                <img class="tab-favicon" src="${favicon}" alt="favicon" onerror="this.src='data:image/svg+xml,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 16 16&quot;><rect width=&quot;16&quot; height=&quot;16&quot; fill=&quot;#ccc&quot;/></svg>'">
                 <div class="tab-content">
                     <div class="tab-title">
                         ${this.escapeHtml(tab.title)}
@@ -791,8 +1059,26 @@ class TabOraclePopup {
         `;
     }
 
+    getTabPreviewContent(tab) {
+        if (!tab.context || !tab.context.pageContent) {
+            return null;
+        }
+        
+        // Get a preview of the page content (first 200 characters)
+        let content = tab.context.pageContent;
+        if (typeof content === 'string') {
+            content = content.trim();
+            if (content.length > 200) {
+                content = content.substring(0, 200) + '...';
+            }
+            return this.escapeHtml(content);
+        }
+        
+        return null;
+    }
+
     createSearchResultElement(tab, query) {
-        const favicon = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23ccc"/></svg>';
+        const favicon = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="#ccc"/></svg>';
         const highlightedTitle = this.highlightText(tab.title, query);
         const highlightedUrl = this.highlightText(tab.url, query);
         const category = this.getCategoryDisplay(tab);
@@ -806,7 +1092,7 @@ class TabOraclePopup {
             <div class="tab-result" data-tab-id="${tab.id}" data-window-id="${tab.windowId}">
                 <div class="result-header">
                     <div class="result-favicon">
-                        <img src="${favicon}" alt="favicon" onerror="this.src='data:image/svg+xml,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 16 16&quot;><rect width=&quot;16&quot; height=&quot;16&quot; fill=&quot;%23ccc&quot;/></svg>'">
+                        <img src="${favicon}" alt="favicon" onerror="this.src='data:image/svg+xml,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 16 16&quot;><rect width=&quot;16&quot; height=&quot;16&quot; fill=&quot;#ccc&quot;/></svg>'">
                         ${isPinned ? '<span class="pin-indicator">📌</span>' : ''}
                     </div>
                     <div class="result-content">
@@ -996,7 +1282,9 @@ class TabOraclePopup {
     }
 
     updateTabCount() {
-        this.tabCount.textContent = `${this.allTabs.length} tab${this.allTabs.length !== 1 ? 's' : ''}`;
+        if (!this.tabCount) return;
+        const n = Array.isArray(this.allTabs) ? this.allTabs.length : 0;
+        this.tabCount.textContent = `${n} tab${n !== 1 ? 's' : ''}`;
     }
 
     addTabClickListeners(container) {

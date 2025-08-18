@@ -7,103 +7,175 @@
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>TabOracle</h1>
-        </div>
-        
-        <!-- Tabbed Search Interface -->
-        <div class="search-tabs">
-            <button class="search-tab active" data-tab="normal">
-                <span class="tab-icon">🔍</span>
-                <span class="tab-label">Normal Search</span>
-            </button>
-            <button class="search-tab" data-tab="category">
-                <span class="tab-icon">🏷️</span>
-                <span class="tab-label">Category Search</span>
-            </button>
-            <button class="search-tab" data-tab="smart">
-                <span class="tab-icon">🧠</span>
-                <span class="tab-label">Smart Search</span>
-            </button>
-        </div>
-        
-        <!-- Normal Search Tab -->
-        <div class="tab-content active" id="normalSearchTab">
-            <div class="search-container">
-                <input 
-                    type="text" 
-                    id="searchInput" 
-                    placeholder="Search tabs by title or URL..."
-                    autocomplete="off"
-                >
-                <div class="search-icon">🔍</div>
+    <div class="app-container">
+        <!-- Modern Header with Branding -->
+        <header class="app-header">
+            <div class="brand-section">
+                <div class="brand-icon">🔮</div>
+                <div class="brand-text">
+                    <h1 class="brand-title">TabOracle</h1>
+                    <p class="brand-subtitle">Intelligent Tab Management</p>
+                </div>
             </div>
-            
-            <div class="tabs-container">
-                <div id="tabsList" class="tabs-list">
-                    <!-- Tabs will be populated here -->
+            <div class="header-actions">
+                <div class="tab-counter" id="tabCount">
+                    <span class="counter-icon">📊</span>
+                    <span class="counter-text">0 tabs</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Modern Tab Navigation -->
+        <nav class="tab-navigation">
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="normalSearchTab">
+                    <span class="tab-icon">🔍</span>
+                    <span class="tab-label">Search</span>
+                </button>
+                <button class="nav-tab" data-tab="categorySearchTab">
+                    <span class="tab-icon">📂</span>
+                    <span class="tab-label">Categories</span>
+                </button>
+                <button class="nav-tab" data-tab="smartSearchTab">
+                    <span class="tab-icon">🧠</span>
+                    <span class="tab-label">AI Search</span>
+                </button>
+                <button class="nav-tab" data-tab="pageSummaryTab">
+                    <span class="tab-icon">📝</span>
+                    <span class="tab-label">Summary</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Normal Search Tab -->
+            <section class="tab-panel active" id="normalSearchTab">
+                <div class="search-section">
+                    <div class="search-wrapper">
+                        <div class="search-input-container">
+                            <input 
+                                type="text" 
+                                id="searchInput" 
+                                class="search-input"
+                                placeholder="Search your tabs..."
+                                autocomplete="off"
+                            >
+                            <div class="search-decoration">
+                                <span class="search-icon">🔍</span>
+                                <span class="search-hint">Type to search</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
-                <div id="searchResults" class="search-results" style="display: none;">
-                    <!-- Search results will be shown here -->
+                <div class="content-section">
+                    <div class="tabs-view" id="tabsList">
+                        <!-- Tabs will be populated here -->
+                    </div>
+                    
+                    <div class="search-results-view" id="searchResults" style="display: none;">
+                        <!-- Search results will be shown here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Category Search Tab -->
+            <section class="tab-panel" id="categorySearchTab">
+                <div class="category-section">
+                    <div class="section-header">
+                        <h2 class="section-title">Browse by Category</h2>
+                        <p class="section-description">Organize your tabs intelligently</p>
+                    </div>
+                    
+                    <div class="categories-container">
+                        <div class="categories-grid" id="categoriesGrid">
+                            <!-- Categories will be generated here -->
+                        </div>
+                        
+                        <div class="category-results" id="categoryResults" style="display: none;">
+                            <!-- Category results will be displayed here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Smart Search Tab -->
+            <section class="tab-panel" id="smartSearchTab">
+                <div class="ai-search-section">
+                    <div class="search-wrapper">
+                        <div class="ai-search-input-container">
+                            <input 
+                                type="text" 
+                                id="smartSearchInput" 
+                                class="ai-search-input"
+                                placeholder="Ask AI to find relevant tabs..."
+                                autocomplete="off"
+                            >
+                            <div class="ai-search-decoration">
+                                <span class="ai-icon">🧠</span>
+                                <span class="ai-hint">Press Enter for AI search</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="ai-instructions">
+                        <div class="instruction-card">
+                            <div class="instruction-header">
+                                <span class="instruction-icon">💡</span>
+                                <span class="instruction-title">How it works</span>
+                            </div>
+                            <p class="instruction-text">
+                                The AI analyzes your tab content and finds the most relevant matches based on meaning, not just keywords.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="ai-results" id="smartSearchResults" style="display: none;">
+                        <!-- AI search results will be displayed here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Page Summary Tab -->
+            <section class="tab-panel" id="pageSummaryTab">
+                <div class="summary-section">
+                    <div class="summary-actions">
+                        <button id="generateSummary" class="primary-button">
+                            <span class="button-icon">✨</span>
+                            <span>Generate Summary</span>
+                        </button>
+                        <button id="testLanguageModel" class="secondary-button">
+                            <span class="button-icon">🧪</span>
+                            <span>Test AI</span>
+                        </button>
+                        <div class="summary-settings">
+                            <label class="toggle">
+                                <input type="checkbox" id="enablePdfDebugger">
+                                <span>Enable PDF capture fallback</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="summary-content" id="pageSummaryContent">
+                        <!-- Summary will be displayed here -->
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Modern Footer -->
+        <footer class="app-footer">
+            <div class="footer-content">
+                <div class="shortcut-info">
+                    <span class="shortcut-icon">⌨️</span>
+                    <span class="shortcut-text">Ctrl+Space to open anywhere</span>
+                </div>
+                <div class="version-info">
+                    <span class="version-text">v1.0</span>
                 </div>
             </div>
-        </div>
-        
-        <!-- Category Search Tab -->
-        <div class="tab-content" id="categorySearchTab">
-            <div class="category-header">
-                <h3>Browse Tabs by Category</h3>
-                <p>Click on a category to see related tabs</p>
-                <button id="debugCategories" class="debug-button">🔍 Debug Categories</button>
-            </div>
-            
-            <div class="categories-grid" id="categoriesGrid">
-                <!-- Categories will be generated here -->
-            </div>
-            
-            <div class="category-results" id="categoryResults" style="display: none;">
-                <!-- Category results will be displayed here -->
-            </div>
-        </div>
-        
-        <!-- Smart Search Tab -->
-        <div class="tab-content" id="smartSearchTab">
-            <div class="smart-search-container">
-                <input 
-                    type="text" 
-                    id="smartSearchInput" 
-                    placeholder="Smart search with semantic understanding and content analysis..."
-                    autocomplete="off"
-                >
-                <div class="search-icon">🧠</div>
-            </div>
-            
-            <div class="smart-search-info">
-                <div class="info-item">
-                    <span class="info-icon">🧠</span>
-                    <span>Semantic understanding</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-icon">📄</span>
-                    <span>Page content analysis</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-icon">🔗</span>
-                    <span>Concept relationships</span>
-                </div>
-            </div>
-            
-            <div class="smart-search-results" id="smartSearchResults" style="display: none;">
-                <!-- Smart search results will be displayed here -->
-            </div>
-        </div>
-        
-        <div class="footer">
-            <div class="tab-count" id="tabCount">0 tabs</div>
-            <div class="shortcut-hint">Press Ctrl+Space anywhere to open</div>
-        </div>
+        </footer>
     </div>
     
     <script src="popup.js"></script>

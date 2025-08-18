@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabOracle Page Summary Debug Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            border-left: 4px solid #007bff;
+        }
+        .test-section h2 {
+            color: #007bff;
+            margin-top: 0;
+        }
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 10px 5px;
+        }
+        .test-button:hover {
+            background: #0056b3;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .status.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .status.info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .test-content {
+            background: #f1f3f4;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📝 TabOracle Page Summary Debug Test</h1>
+        <p>Debug the page summary functionality step by step</p>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 Step-by-Step Page Summary Test</h2>
+        <p>This page has rich content to test the summary generation. Follow the steps below:</p>
+        
+        <div class="test-content">
+            <h3>Sample Content for Summary Testing</h3>
+            <p>This is a comprehensive test page designed to evaluate TabOracle's page summary functionality. It contains various types of content including headings, paragraphs, and structured information that should be properly analyzed by the AI-powered summary generator.</p>
+            
+            <h4>Key Features to Test</h4>
+            <ul>
+                <li><strong>Content Extraction:</strong> The extension should extract this text content</li>
+                <li><strong>AI Analysis:</strong> Gemini Nano should analyze and summarize the content</li>
+                <li><strong>Fallback Support:</strong> Traditional NLP should work if AI fails</li>
+                <li><strong>Error Handling:</strong> Proper error messages should display</li>
+            </ul>
+            
+            <h4>Technical Details</h4>
+            <p>The page summary feature works by extracting page content, sending it to the Chrome Language Model for analysis, and then displaying a structured summary with key points, content type, and reading time estimates.</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 Debug Steps</h2>
+        
+        <button class="test-button" onclick="testStep1()">Step 1: Test Extension Connection</button>
+        <button class="test-button" onclick="testStep2()">Step 2: Test Tab Detection</button>
+        <button class="test-button" onclick="testStep3()">Step 3: Test Content Extraction</button>
+        <button class="test-button" onclick="testStep4()">Step 4: Test Gemini Manager</button>
+        <button class="test-button" onclick="testStep5()">Step 5: Test Full Summary</button>
+        <button class="test-button" onclick="openTabOracle()">Open TabOracle</button>
+    </div>
+
+    <div id="status" class="status info">Ready to test page summary functionality...</div>
+
+    <div class="test-section">
+        <h2>📋 Expected Results</h2>
+        <ul>
+            <li><strong>Step 1:</strong> Extension should connect successfully</li>
+            <li><strong>Step 2:</strong> Current tab should be detected</li>
+            <li><strong>Step 3:</strong> Page content should be extracted</li>
+            <li><strong>Step 4:</strong> Gemini manager should be available</li>
+            <li><strong>Step 5:</strong> Summary should be generated successfully</li>
+        </ul>
+    </div>
+
+    <script>
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        async function testStep1() {
+            try {
+                updateStatus('Step 1: Testing extension connection...', 'info');
+                
+                const response = await chrome.runtime.sendMessage({ action: 'ping' });
+                
+                if (response && response.status === 'ok') {
+                    updateStatus('✅ Step 1: Extension connection successful!\nTabOracle is running and responding.', 'success');
+                } else {
+                    updateStatus('❌ Step 1: Extension connection failed\nResponse: ' + JSON.stringify(response), 'error');
+                }
+            } catch (error) {
+                updateStatus('❌ Step 1: Extension connection error\nError: ' + error.message, 'error');
+            }
+        }
+
+        async function testStep2() {
+            try {
+                updateStatus('Step 2: Testing tab detection...', 'info');
+                
+                const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                
+                if (currentTab) {
+                    updateStatus(`✅ Step 2: Tab detection successful!\nTitle: ${currentTab.title}\nURL: ${currentTab.url}\nID: ${currentTab.id}`, 'success');
+                } else {
+                    updateStatus('❌ Step 2: No active tab found', 'error');
+                }
+            } catch (error) {
+                updateStatus('❌ Step 2: Tab detection error\nError: ' + error.message, 'error');
+            }
+        }
+
+        async function testStep3() {
+            try {
+                updateStatus('Step 3: Testing content extraction...', 'info');
+                
+                const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                
+                if (!currentTab) {
+                    updateStatus('❌ Step 3: No active tab found', 'error');
+                    return;
+                }
+                
+                const response = await chrome.runtime.sendMessage({
+                    action: 'getPageContent',
+                    tabId: currentTab.id
+                });
+                
+                if (response && response.success) {
+                    updateStatus(`✅ Step 3: Content extraction successful!\nContent length: ${response.contentLength} characters\nSample: ${response.content.substring(0, 100)}...`, 'success');
+                } else {
+                    updateStatus('❌ Step 3: Content extraction failed\nError: ' + (response?.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                updateStatus('❌ Step 3: Content extraction error\nError: ' + error.message, 'error');
+            }
+        }
+
+        async function testStep4() {
+            try {
+                updateStatus('Step 4: Testing Gemini manager...', 'info');
+                
+                const response = await chrome.runtime.sendMessage({ action: 'getGeminiStatus' });
+                
+                if (response && response.status === 'ok') {
+                    updateStatus('✅ Step 4: Gemini status check successful!\nNote: ' + (response.note || 'No additional info'), 'success');
+                } else {
+                    updateStatus('❌ Step 4: Gemini status check failed\nResponse: ' + JSON.stringify(response), 'error');
+                }
+            } catch (error) {
+                updateStatus('❌ Step 4: Gemini status check error\nError: ' + error.message, 'error');
+            }
+        }
+
+        async function testStep5() {
+            try {
+                updateStatus('Step 5: Testing full summary generation...', 'info');
+                
+                // This will test the actual summary generation
+                // Open TabOracle and try the Page Summary tab
+                updateStatus('✅ Step 5: Ready for manual testing!\n1. Click "Open TabOracle" button\n2. Go to "📝 Page Summary" tab\n3. Click "Generate Summary" button\n4. Check console for detailed logs', 'success');
+                
+            } catch (error) {
+                updateStatus('❌ Step 5: Summary test error\nError: ' + error.message, 'error');
+            }
+        }
+
+        function openTabOracle() {
+            try {
+                updateStatus('Opening TabOracle popup...', 'info');
+                chrome.action.openPopup();
+                updateStatus('✅ TabOracle popup opened!\nNow test the Page Summary tab manually.', 'success');
+            } catch (error) {
+                updateStatus('❌ Failed to open popup\nError: ' + error.message, 'error');
+            }
+        }
+
+        // Auto-test on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📝 TabOracle Page Summary Debug Test Page Loaded');
+            console.log('🧪 Ready to debug the page summary functionality!');
+            
+            // Auto-test connection
+            setTimeout(testStep1, 1000);
+        });
+    </script>
+</body>
+</html>

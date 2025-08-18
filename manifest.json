@@ -7,7 +7,9 @@
     "tabs",
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "offscreen",
+    "debugger"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -20,6 +22,18 @@
       "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "gemini-manager.js",
+        "offscreen.html",
+        "offscreen.js",
+        "vendor/pdfjs/pdf.min.js",
+        "vendor/pdfjs/pdf.worker.min.js"
+      ],
+      "matches": ["<all_urls>"]
     }
   ],
   "action": {

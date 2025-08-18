@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabOracle - Scrolling Fix Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f3f4f6;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+        }
+        
+        .test-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .test-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 10px;
+        }
+        
+        .test-subtitle {
+            font-size: 16px;
+            color: #6b7280;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+        }
+        
+        .test-section h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 8px;
+        }
+        
+        .test-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .test-tab-button {
+            padding: 10px 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 150ms ease-in-out;
+            font-weight: 500;
+        }
+        
+        .test-tab-button.active {
+            border-color: #0ea5e9;
+            background: #0ea5e9;
+            color: white;
+        }
+        
+        .test-tab-button:hover {
+            border-color: #0ea5e9;
+        }
+        
+        .test-tab-content {
+            display: none;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            background: white;
+            height: 400px;
+            overflow: hidden;
+        }
+        
+        .test-tab-content.active {
+            display: block;
+        }
+        
+        .test-scrollable-area {
+            height: 100%;
+            overflow-y: auto;
+            padding: 10px;
+            background: #f8fafc;
+            border-radius: 6px;
+        }
+        
+        .test-item {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+        }
+        
+        .test-item-title {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        
+        .test-item-content {
+            color: #64748b;
+            line-height: 1.5;
+        }
+        
+        .test-status {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .test-status h4 {
+            margin: 0 0 10px 0;
+            color: #0ea5e9;
+        }
+        
+        .test-status ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .test-status li {
+            margin-bottom: 5px;
+            color: #374151;
+        }
+        
+        .test-button {
+            background: #0ea5e9;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            margin: 5px;
+        }
+        
+        .test-button:hover {
+            background: #0284c7;
+        }
+        
+        .debug-info {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-header">
+            <h1 class="test-title">TabOracle - Scrolling Fix Test</h1>
+            <p class="test-subtitle">Testing the improved scrolling behavior in all tabs</p>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔧 Scrolling Issues Fixed</h3>
+            <div class="test-status">
+                <h4>✅ What Was Fixed:</h4>
+                <ul>
+                    <li><strong>Body Overflow:</strong> Removed body scrolling, content areas now scroll independently</li>
+                    <li><strong>Tab Panel Heights:</strong> Fixed flexbox height calculations for proper content sizing</li>
+                    <li><strong>Scrollable Areas:</strong> Ensured all content areas have proper overflow-y: auto</li>
+                    <li><strong>Height Constraints:</strong> Added proper height and max-height constraints</li>
+                    <li><strong>Tab Switching:</strong> Fixed scrolling behavior when switching between tabs</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🧪 Test Scrolling in Different Tabs</h3>
+            <p>Click on different tabs to test the scrolling behavior. Each tab should scroll independently.</p>
+            
+            <div class="test-tabs">
+                <button class="test-tab-button active" data-tab="search">🔍 Search Tab</button>
+                <button class="test-tab-button" data-tab="categories">📂 Categories Tab</button>
+                <button class="test-tab-button" data-tab="ai">🧠 AI Search Tab</button>
+                <button class="test-tab-button" data-tab="summary">📝 Summary Tab</button>
+            </div>
+            
+            <div class="test-tab-content active" id="search">
+                <h4>Search Tab Content</h4>
+                <div class="test-scrollable-area">
+                    <div class="test-item">
+                        <div class="test-item-title">Search Result 1</div>
+                        <div class="test-item-content">This is a search result with some content to demonstrate scrolling.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Search Result 2</div>
+                        <div class="test-item-content">Another search result to show how the scrolling works.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Search Result 3</div>
+                        <div class="test-item-content">More content to ensure the scrollable area has enough items.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Search Result 4</div>
+                        <div class="test-item-content">Additional content to test scrolling behavior.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Search Result 5</div>
+                        <div class="test-item-content">More search results to demonstrate the scrolling functionality.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Search Result 6</div>
+                        <div class="test-item-content">Another item to ensure proper scrolling behavior.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Search Result 7</div>
+                        <div class="test-item-content">More content to test the scrollable area.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Search Result 8</div>
+                        <div class="test-item-content">Additional search results for testing purposes.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Search Result 9</div>
+                        <div class="test-item-content">More content to ensure proper scrolling behavior.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Search Result 10</div>
+                        <div class="test-item-content">Final search result to complete the scrolling test.</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="test-tab-content" id="categories">
+                <h4>Categories Tab Content</h4>
+                <div class="test-scrollable-area">
+                    <div class="test-item">
+                        <div class="test-item-title">Development Category</div>
+                        <div class="test-item-content">Contains programming, coding, and development related tabs.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Productivity Category</div>
+                        <div class="test-item-content">Contains tools, extensions, and productivity apps.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Entertainment Category</div>
+                        <div class="test-item-content">Contains media, games, and entertainment websites.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">News Category</div>
+                        <div class="test-item-content">Contains news, blogs, and information websites.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Shopping Category</div>
+                        <div class="test-item-content">Contains e-commerce and shopping websites.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Social Category</div>
+                        <div class="test-item-content">Contains social media and communication platforms.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Education Category</div>
+                        <div class="test-item-content">Contains learning resources and educational content.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Finance Category</div>
+                        <div class="test-item-content">Contains banking, investment, and financial tools.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Health Category</div>
+                        <div class="test-item-content">Contains health, fitness, and wellness resources.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Travel Category</div>
+                        <div class="test-item-content">Contains travel planning and destination information.</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="test-tab-content" id="ai">
+                <h4>AI Search Tab Content</h4>
+                <div class="test-scrollable-area">
+                    <div class="test-item">
+                        <div class="test-item-title">AI Search Result 1</div>
+                        <div class="test-item-content">AI-powered search result with semantic analysis.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">AI Search Result 2</div>
+                        <div class="test-item-content">Another AI search result demonstrating content similarity.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">AI Search Result 3</div>
+                        <div class="test-item-content">More AI search results to test scrolling behavior.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">AI Search Result 4</div>
+                        <div class="test-item-content">Additional AI-powered search results.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">AI Search Result 5</div>
+                        <div class="test-item-content">More content to demonstrate AI search capabilities.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">AI Search Result 6</div>
+                        <div class="test-item-content">Additional AI search results for testing.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">AI Search Result 7</div>
+                        <div class="test-item-content">More AI-powered search results.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">AI Search Result 8</div>
+                        <div class="test-item-content">Final AI search result to complete the test.</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="test-tab-content" id="summary">
+                <h4>Summary Tab Content</h4>
+                <div class="test-scrollable-area">
+                    <div class="test-item">
+                        <div class="test-item-title">Page Summary 1</div>
+                        <div class="test-item-content">AI-generated summary of the current page content.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Page Summary 2</div>
+                        <div class="test-item-content">Another page summary with key points and insights.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Page Summary 3</div>
+                        <div class="test-item-content">More page summaries to test scrolling functionality.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Page Summary 4</div>
+                        <div class="test-item-content">Additional page summaries for demonstration.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Page Summary 5</div>
+                        <div class="test-item-content">More content to ensure proper scrolling behavior.</div>
+                    </div>
+                    <div class="test-item">
+                        <div class="test-item-title">Page Summary 6</div>
+                        <div class="test-item-content">Final page summary to complete the scrolling test.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🚀 How to Test in TabOracle Extension</h3>
+            <ol>
+                <li><strong>Install the Extension:</strong> Load TabOracle in Chrome developer mode</li>
+                <li><strong>Open Popup:</strong> Click the TabOracle icon or press Ctrl+Space</li>
+                <li><strong>Test Each Tab:</strong> Switch between Search, Categories, AI Search, and Summary tabs</li>
+                <li><strong>Verify Scrolling:</strong> Each tab should scroll independently without affecting the popup body</li>
+                <li><strong>Check Content:</strong> All content should be accessible through tab scrolling</li>
+            </ol>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔍 Debug Information</h3>
+            <div class="debug-info">
+                <strong>Expected Behavior:</strong><br>
+                • Body should NOT scroll (overflow: hidden)<br>
+                • Each tab content area should scroll independently<br>
+                • Tab switching should maintain proper scrolling behavior<br>
+                • Content should be fully accessible through tab scrolling<br>
+                <br>
+                <strong>CSS Changes Made:</strong><br>
+                • Removed body overflow-y: auto<br>
+                • Added proper height constraints to all scrollable areas<br>
+                • Fixed flexbox layout for proper content sizing<br>
+                • Added JavaScript scrolling fixes for tab switching
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching functionality
+        document.querySelectorAll('.test-tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                // Update active button
+                document.querySelectorAll('.test-tab-button').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                
+                // Update active content
+                const tabId = button.dataset.tab;
+                document.querySelectorAll('.test-tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+        
+        // Test scrolling functionality
+        function testScrolling() {
+            const scrollableAreas = document.querySelectorAll('.test-scrollable-area');
+            scrollableAreas.forEach(area => {
+                if (area.scrollHeight > area.clientHeight) {
+                    console.log('✅ Scrolling enabled for:', area.parentElement.id);
+                } else {
+                    console.log('⚠️ No scrolling needed for:', area.parentElement.id);
+                }
+            });
+        }
+        
+        // Test scrolling after page load
+        setTimeout(testScrolling, 100);
+    </script>
+</body>
+</html>
