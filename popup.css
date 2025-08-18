@@ -1143,6 +1143,17 @@ body {
     margin: 0 var(--spacing-2) var(--spacing-2);
 }
 
+.notice {
+    margin-left: var(--spacing-2);
+    color: var(--warning-600);
+    font-size: var(--font-size-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+.notice .notice-text { max-width: 240px; }
+.notice .notice-actions { display: flex; align-items: center; }
+
 /* ===== EMPTY STATES - Compact ===== */
 .empty-state {
     text-align: center;

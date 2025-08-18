@@ -29,11 +29,13 @@ class TabOraclePopup {
                 console.log('✅ TabOracle: window.LanguageModel initialized');
             } else {
                 console.log('⚠️ TabOracle: On-device language model not available; will use fallback');
+                if (this.geminiNotice) this.geminiNotice.style.display = 'flex';
             }
         } catch (e) {
             console.warn('⚠️ TabOracle: Language model init failed, using fallback', e);
             this.languageModel = null;
             this.languageModelInitialized = false;
+            if (this.geminiNotice) this.geminiNotice.style.display = 'flex';
         }
     }
 
@@ -210,6 +212,8 @@ class TabOraclePopup {
         this.testLanguageModelButton = document.getElementById('testLanguageModel');
         this.pageSummaryContent = document.getElementById('pageSummaryContent');
         this.enablePdfDebuggerToggle = document.getElementById('enablePdfDebugger');
+        this.geminiNotice = document.getElementById('geminiNotice');
+        this.openFlagsButton = document.getElementById('openFlags');
         this.languageModel = null;
         this.languageModelInitialized = false;
         
@@ -286,6 +290,11 @@ class TabOraclePopup {
             });
             this.enablePdfDebuggerToggle.addEventListener('change', () => {
                 chrome.storage.local.set({ enablePdfDebugger: this.enablePdfDebuggerToggle.checked });
+            });
+        }
+        if (this.openFlagsButton) {
+            this.openFlagsButton.addEventListener('click', () => {
+                chrome.tabs.create({ url: 'chrome://flags/#prompt-api-for-gemini-nano' });
             });
         }
         
