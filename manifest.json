@@ -5,11 +5,9 @@
   "description": "Intelligent context-aware tab search and organization with Ctrl+Space shortcut",
   "permissions": [
     "tabs",
-    "activeTab",
     "storage",
     "scripting",
-    "offscreen",
-    "debugger"
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>"

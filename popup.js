@@ -213,7 +213,7 @@ class TabOraclePopup {
         this.generateSummaryButton = document.getElementById('generateSummary');
         this.testLanguageModelButton = document.getElementById('testLanguageModel');
         this.pageSummaryContent = document.getElementById('pageSummaryContent');
-        this.enablePdfDebuggerToggle = document.getElementById('enablePdfDebugger');
+        
         this.geminiNotice = document.getElementById('geminiNotice');
         this.openFlagsButton = document.getElementById('openFlags');
         this.languageModel = null;
@@ -285,15 +285,7 @@ class TabOraclePopup {
         if (this.generateSummaryButton) {
             this.generateSummaryButton.addEventListener('click', () => this.handleGenerateSummary());
         }
-        if (this.enablePdfDebuggerToggle) {
-            chrome.storage.local.get(['enablePdfDebugger'], (cfg) => {
-                const enabled = !!cfg.enablePdfDebugger;
-                this.enablePdfDebuggerToggle.checked = enabled;
-            });
-            this.enablePdfDebuggerToggle.addEventListener('change', () => {
-                chrome.storage.local.set({ enablePdfDebugger: this.enablePdfDebuggerToggle.checked });
-            });
-        }
+        
         if (this.openFlagsButton) {
             this.openFlagsButton.addEventListener('click', () => {
                 chrome.tabs.create({ url: 'chrome://flags/#prompt-api-for-gemini-nano' });

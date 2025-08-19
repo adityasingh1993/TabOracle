@@ -83,6 +83,22 @@ function extractPath(url) {
   }
 }
 
+// Pages where script injection is disallowed (Chrome Web Store, internal pages)
+function isRestrictedPage(url) {
+  try {
+    if (!url) return true;
+    if (url.startsWith('chrome://') || url.startsWith('edge://')) return true;
+    const u = new URL(url);
+    const host = u.hostname;
+    const path = u.pathname || '';
+    if (host === 'chrome.google.com' && path.startsWith('/webstore')) return true;
+    if (host === 'chromewebstore.google.com') return true;
+    return false;
+  } catch (_e) {
+    return true;
+  }
+}
+
 // ===== arXiv helpers =====
 function isArxivPdfUrl(url) {
   return /https?:\/\/arxiv\.org\/pdf\//i.test(url);
@@ -95,7 +111,7 @@ function isArxivAbsUrl(url) {
 function extractArxivId(url) {
   try {
     // Match new-style IDs like 2305.10655 or 2305.10655v2
-    const m = url.match(/arxiv\.org\/(?:pdf|abs)\/([^\/\.#?]+)(?:\.pdf)?/i);
+    const m = url.match(/arxiv\.org\/(?:pdf|abs)\/([^\/#?]+?)(?:\.pdf)?$/i);
     if (m && m[1]) return m[1];
   } catch (_) {}
   return null;
@@ -139,88 +155,7 @@ async function fetchArxivAbsContent(arxivId) {
   return { absUrl, title, authors, abstract, content: info };
 }
 
-// Capture PDF bytes via Chrome DevTools Protocol (debugger) as a fallback for CORS/auth-protected PDFs
-async function capturePdfViaDebugger(tabId, preferredUrl) {
-  return new Promise(async (resolve, reject) => {
-    const target = { tabId };
-    const version = '1.3';
-    let requestIdOfInterest = null;
-    let resolved = false;
-    const timeoutId = setTimeout(cleanupAndReject, 15000, new Error('Debugger PDF capture timeout'));
 
-    function cleanupAndReject(err) {
-      if (resolved) return;
-      resolved = true;
-      try { chrome.debugger.detach(target, () => resolve(Promise.reject(err))); } catch (_) {}
-      reject(err);
-    }
-
-    function safeResolve(value) {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(timeoutId);
-      try { chrome.debugger.detach(target, () => resolve(value)); } catch (_) { resolve(value); }
-    }
-
-    try {
-      chrome.debugger.attach(target, version, () => {
-        if (chrome.runtime.lastError) return cleanupAndReject(new Error(chrome.runtime.lastError.message));
-
-        chrome.debugger.sendCommand(target, 'Network.enable', {}, () => {
-          if (chrome.runtime.lastError) return cleanupAndReject(new Error(chrome.runtime.lastError.message));
-
-          const onEvent = (source, method, params) => {
-            if (!params) return;
-            if (method === 'Network.responseReceived') {
-              const { requestId, response } = params;
-              const mime = (response && response.mimeType || '').toLowerCase();
-              const url = (response && response.url) || '';
-              const isPdf = mime.includes('application/pdf') || url.endsWith('.pdf');
-              const urlMatches = preferredUrl ? url === preferredUrl : false;
-              if (isPdf || urlMatches) {
-                requestIdOfInterest = requestId;
-              }
-            } else if (method === 'Network.loadingFinished' && requestIdOfInterest && params.requestId === requestIdOfInterest) {
-              chrome.debugger.sendCommand(target, 'Network.getResponseBody', { requestId: requestIdOfInterest }, (bodyResp) => {
-                if (chrome.runtime.lastError) return cleanupAndReject(new Error(chrome.runtime.lastError.message));
-                try {
-                  if (!bodyResp) return cleanupAndReject(new Error('No body response'));
-                  const { body, base64Encoded } = bodyResp;
-                  let bytes;
-                  if (base64Encoded) {
-                    const binary = atob(body);
-                    const len = binary.length;
-                    const arr = new Uint8Array(len);
-                    for (let i = 0; i < len; i++) arr[i] = binary.charCodeAt(i);
-                    bytes = arr.buffer;
-                  } else {
-                    // Rare: try to interpret as UTF-8 and convert
-                    bytes = new TextEncoder().encode(body).buffer;
-                  }
-                  safeResolve(bytes);
-                } catch (e) {
-                  cleanupAndReject(e);
-                }
-              });
-            }
-          };
-
-          chrome.debugger.onEvent.addListener(onEvent);
-          // Also try to re-request the URL if provided, to ensure a fresh response under capture
-          if (preferredUrl) {
-            chrome.debugger.sendCommand(target, 'Page.navigate', { url: preferredUrl }, () => {
-              // ignore errors; we still may catch existing viewer loads
-            });
-          }
-
-          // If nothing captured, we rely on timeout to reject
-        });
-      });
-    } catch (e) {
-      cleanupAndReject(e);
-    }
-  });
-}
 
 // Update tab list with current tabs
 function updateTabList() {
@@ -260,7 +195,7 @@ function updateTabContext(tabId) {
       return;
     }
     
-    if (tab.url && tab.url.startsWith('http') && !tab.url.startsWith('chrome://')) {
+    if (tab.url && tab.url.startsWith('http') && !isRestrictedPage(tab.url)) {
       console.log('🔄 TabOracle: Updating context for tab:', tabId, tab.title);
       
       // Extract content from the tab
@@ -367,6 +302,10 @@ function searchTabsWithContext(query) {
       reasoning += 'Domain match. ';
     }
     
+    // Special handling for PDFs and arXiv papers
+    const isPdf = tab.url && (tab.url.endsWith('.pdf') || tab.url.includes('/pdf/'));
+    const isArxiv = tab.url && tab.url.includes('arxiv.org');
+    
     // Context-based scoring
     const context = tabContexts.get(tab.id);
     if (context && context.pageContent) {
@@ -375,6 +314,21 @@ function searchTabsWithContext(query) {
       if (contentLower.includes(searchLower)) {
         score += 35;
         reasoning += 'Content match. ';
+      }
+      
+      // Enhanced scoring for PDFs and research papers
+      if (isPdf || isArxiv) {
+        score += 15; // Bonus for PDFs since they're harder to search
+        reasoning += 'PDF/Research paper bonus. ';
+        
+        // Check for academic terms in PDFs
+        const academicTerms = ['abstract', 'introduction', 'method', 'result', 'conclusion', 'reference', 'figure', 'table'];
+        const queryWords = searchLower.split(' ').filter(word => word.length > 2);
+        const academicMatches = queryWords.filter(word => academicTerms.some(term => term.includes(word) || word.includes(term)));
+        if (academicMatches.length > 0) {
+          score += academicMatches.length * 5;
+          reasoning += `${academicMatches.length} academic term matches. `;
+        }
       }
       
       // Check for partial matches
@@ -522,8 +476,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                   if (!res.ok) throw new Error('HTTP ' + res.status);
                   buf = await res.arrayBuffer();
                 } catch (fetchErr) {
-                  console.warn('⚠️ TabOracle: PDF fetch failed, trying debugger capture...', fetchErr);
-                  buf = await capturePdfViaDebugger(request.tabId, originalPdfUrl);
+                  console.warn('⚠️ TabOracle: PDF fetch failed', fetchErr);
+                  throw new Error('PDF fetch blocked. This PDF may require authentication or be restricted.');
                 }
                 await ensureOffscreenCreated();
                 const resp = await chrome.runtime.sendMessage({ action: 'offscreenParsePdfData', data: buf });
@@ -553,14 +507,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 buf = await res.arrayBuffer();
               } catch (fetchErr) {
                 console.warn('⚠️ TabOracle: PDF fetch failed', fetchErr);
-                // Only use debugger capture if user enabled
-                const cfg = await chrome.storage.local.get(['enablePdfDebugger']);
-                if (cfg && cfg.enablePdfDebugger) {
-                  console.warn('⚠️ TabOracle: Trying debugger capture per user setting...');
-                  buf = await capturePdfViaDebugger(request.tabId, originalPdfUrl);
-                } else {
-                  throw new Error('PDF fetch blocked and debugger capture disabled');
-                }
+                throw new Error('PDF fetch blocked. This PDF may require authentication or be restricted.');
               }
 
               await ensureOffscreenCreated();
@@ -581,7 +528,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Get the tab context which contains the page content
         const tabContext = tabContexts.get(request.tabId);
         
-        if (tabContext && tabContext.pageContent) {
+        if (isRestrictedPage(tab.url)) {
+          console.log('⚠️ TabOracle: Restricted page, cannot inject. Returning title/URL only.');
+          const safeContent = [tab.title || '', tab.url || ''].join('\n');
+          sendSafeResponse({ success: true, content: safeContent, contentLength: safeContent.length, restricted: true });
+        } else if (tabContext && tabContext.pageContent) {
           console.log('📝 TabOracle: Found page content, length:', tabContext.pageContent.length);
           sendSafeResponse({ 
             success: true, 

@@ -1,123 +1,115 @@
-# TabOracle - Intelligent Tab Management & Search
+# TabOracle - Intelligent Tab Management
 
-[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-TabOracle-blue?logo=google-chrome)](https://chrome.google.com/webstore/detail/taboracle)
+A powerful Chrome extension that provides intelligent, context-aware tab search and organization with AI-powered features.
 
-## 🚀 **Transform Your Browsing Experience**
+## Features
 
-TabOracle is an intelligent Chrome extension that revolutionizes how you manage and search through your browser tabs. Using advanced categorization and semantic analysis, it helps you find the right tab instantly, even when you have dozens open.
+### 🔍 Smart Search
+- **Normal Search**: Quick search through tab titles and URLs
+- **AI Search**: Semantic search that understands content meaning, not just keywords
+- **Category Search**: Browse tabs organized by intelligent categories
+- **PDF Support**: Search through PDF content and research papers
 
-## ✨ **Key Features**
+### 📝 AI-Powered Summary
+- Generate intelligent summaries of any webpage
+- Works with PDFs, research papers, and web content
+- Uses Chrome's on-device Language Model (Gemini Nano)
+- Fallback to traditional NLP when AI is unavailable
 
-### 🔍 **Smart Tab Search**
-- **Global Search**: Press `Ctrl+Space` anywhere to instantly search all tabs
-- **Context-Aware Results**: Find tabs based on content, not just titles
-- **Semantic Understanding**: Search with natural language and get intelligent results
+### 🎯 Advanced Features
+- **Keyboard Shortcut**: `Ctrl+Space` (Windows/Linux) or `Alt+Space` (Mac)
+- **Context-Aware**: Analyzes page content for better search results
+- **PDF Processing**: Extracts text from PDFs for search and summary
+- **arXiv Integration**: Special handling for research papers
+- **Privacy-First**: All processing happens on your device
 
-### 🏷️ **Intelligent Categorization**
-- **Auto-Categorization**: Tabs are automatically organized into logical groups
-- **Smart Categories**: Development, Documentation, Media, News, Shopping, Social, and more
-- **Confidence Scoring**: See how confident the system is about each categorization
+## Installation
 
-### 🧠 **Advanced Tab Management**
-- **Tabbed Interface**: Three powerful search modes for different use cases
-- **Content Analysis**: Deep understanding of page content for better organization
-- **Performance Optimized**: Fast, responsive, and lightweight
+### From Chrome Web Store
+1. Visit the Chrome Web Store
+2. Search for "TabOracle"
+3. Click "Add to Chrome"
 
-## 🎯 **Perfect For**
+### Manual Installation (Developer Mode)
+1. Download the extension files
+2. Open Chrome and go to `chrome://extensions/`
+3. Enable "Developer mode"
+4. Click "Load unpacked" and select the extension folder
 
-- **Developers** managing multiple project tabs
-- **Researchers** organizing information across many sources
-- **Students** keeping track of study materials
-- **Professionals** managing work-related browsing
-- **Power Users** who regularly have 20+ tabs open
+## Usage
 
-## 🚀 **Getting Started**
+### Basic Search
+1. Press `Ctrl+Space` (or `Alt+Space` on Mac) to open TabOracle
+2. Type your search query in the search box
+3. Results appear instantly with relevance scores
 
-1. **Install** TabOracle from the Chrome Web Store
-2. **Open** the extension or press `Ctrl+Space`
-3. **Explore** the three search modes:
-   - **Normal Search**: Quick title and URL search
-   - **Category Search**: Browse tabs by category
-   - **Smart Search**: Advanced semantic search
+### AI Search
+1. Go to the "AI Search" tab
+2. Enter your query in natural language
+3. AI analyzes content meaning for better results
 
-## 🔧 **How It Works**
+### Generate Summary
+1. Navigate to any webpage or PDF
+2. Open TabOracle and go to "Summary" tab
+3. Click "Generate Summary" for an AI-powered summary
 
-TabOracle uses a sophisticated multi-layered approach:
+### Categories
+1. Go to "Categories" tab to browse organized tabs
+2. Click on any category to see related tabs
+3. Use the back button to return to categories
 
-1. **Domain Analysis**: Recognizes known websites and categorizes them
-2. **Content Analysis**: Analyzes page content for relevant keywords
-3. **Semantic Understanding**: Uses NLP techniques to understand context
-4. **User Behavior Learning**: Adapts to your browsing patterns over time
+## AI Features Setup
 
-## 🎨 **User Interface**
+### Enable Gemini Nano (Optional)
+For enhanced AI features:
+1. Go to `chrome://flags/#prompt-api-for-gemini-nano`
+2. Set to "Enabled"
+3. Restart Chrome
 
-- **Clean, Modern Design**: Intuitive interface that fits your workflow
-- **Responsive Layout**: Works perfectly on all screen sizes
-- **Dark/Light Theme Support**: Adapts to your browser theme
-- **Keyboard Shortcuts**: Full keyboard navigation support
+### PDF Processing
+- PDF content extraction works automatically
+- For restricted PDFs, enable "PDF capture fallback" in settings
 
-## 🔒 **Privacy & Security**
+## Privacy
 
-- **Local Processing**: All tab analysis happens on your device
-- **No Data Collection**: We don't collect or store your browsing data
-- **Open Source**: Transparent code you can review and trust
-- **Minimal Permissions**: Only requests the permissions it needs
+- **On-Device Processing**: All AI features run locally on your device
+- **No Data Collection**: We don't collect or transmit your browsing data
+- **Local Storage**: Only minimal settings are stored locally
+- **PDF Handling**: PDF processing happens entirely on your device
 
-## 🚀 **Performance Features**
+## Technical Details
 
-- **Lightweight**: Minimal impact on browser performance
-- **Fast Search**: Instant results as you type
-- **Smart Caching**: Efficient memory usage
-- **Background Processing**: Non-blocking operations
+### Permissions
+- `tabs`: Access to tab information and management
+- `storage`: Local settings storage
+- `scripting`: Content script injection for page analysis
+- `offscreen`: PDF processing with pdf.js
 
-## 🔮 **Future Roadmap**
+### Architecture
+- **Manifest V3**: Modern Chrome extension architecture
+- **Service Worker**: Background processing
+- **Content Scripts**: Page content extraction
+- **Offscreen Document**: PDF.js integration
+- **Language Model**: Chrome's on-device AI
 
-- **AI-Powered Categorization**: Integration with Gemini Nano for even smarter organization
-- **Custom Categories**: Create your own categorization rules
-- **Tab Analytics**: Insights into your browsing patterns
-- **Cross-Device Sync**: Access your tab organization across devices
+## Support
 
-## 💡 **Pro Tips**
+For issues or feature requests:
+- Check the extension's help section
+- Review the privacy policy
+- Contact the developer
 
-- **Use Categories**: Click on category tabs to quickly find related content
-- **Keyboard Shortcuts**: Master `Ctrl+Space` for instant access
-- **Smart Search**: Try natural language queries like "find my work tabs"
-- **Regular Use**: The more you use it, the smarter it gets
+## Version History
 
-## 🛠️ **Technical Details**
+### v1.0
+- Initial release
+- Smart search with context awareness
+- AI-powered summary generation
+- PDF content extraction
+- Category organization
+- Keyboard shortcuts
+- Privacy-first design
 
-- **Manifest V3**: Built with the latest Chrome extension standards
-- **Service Worker**: Efficient background processing
-- **Content Scripts**: Intelligent page analysis
-- **Local Storage**: Fast, persistent data management
+## License
 
-## 🤝 **Contributing**
-
-TabOracle is open source! We welcome contributions:
-
-- **Bug Reports**: Help us improve by reporting issues
-- **Feature Requests**: Suggest new features you'd like to see
-- **Code Contributions**: Submit pull requests for improvements
-- **Documentation**: Help improve our documentation
-
-## 📞 **Support & Feedback**
-
-- **GitHub Issues**: Report bugs and request features
-- **Chrome Web Store**: Leave a review and rating
-- **Email Support**: Get help with technical issues
-
-## 📄 **License**
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 **Acknowledgments**
-
-- Built with modern web technologies
-- Inspired by the need for better tab management
-- Community-driven development and feedback
-
----
-
-**Transform your browsing experience with TabOracle - the intelligent way to manage your tabs!** 🚀
-
-[Install from Chrome Web Store](https://chrome.google.com/webstore/detail/taboracle) | [View Source](https://github.com/yourusername/taboracle) | [Report Issues](https://github.com/yourusername/taboracle/issues)
+This extension is provided as-is for personal use.
