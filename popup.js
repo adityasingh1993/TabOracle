@@ -15,27 +15,70 @@ class TabOraclePopup {
     async ensureLanguageModelInitialized() {
         if (this.languageModelInitialized) return;
         try {
-            if (typeof LanguageModel !== 'undefined' && LanguageModel.create) {
-                this.languageModel = await LanguageModel.create();
-                this.languageModelInitialized = true;
-                console.log('✅ TabOracle: Language model initialized');
-            } else if (typeof chrome !== 'undefined' && chrome.languageModel && chrome.languageModel.create) {
+            console.log('🔍 TabOracle: Checking for language model availability...');
+            
+            // Check for Chrome Language Model (Gemini Nano)
+            if (typeof chrome !== 'undefined' && chrome.languageModel && chrome.languageModel.create) {
+                console.log('🔍 TabOracle: Chrome Language Model API available, attempting to initialize...');
                 this.languageModel = await chrome.languageModel.create();
                 this.languageModelInitialized = true;
-                console.log('✅ TabOracle: chrome.languageModel initialized');
-            } else if (typeof window !== 'undefined' && window.LanguageModel && window.LanguageModel.create) {
+                console.log('✅ TabOracle: Chrome Language Model initialized successfully');
+                return;
+            }
+            
+            // Check for global LanguageModel (alternative access method)
+            if (typeof LanguageModel !== 'undefined' && LanguageModel.create) {
+                console.log('🔍 TabOracle: Global LanguageModel available, attempting to initialize...');
+                this.languageModel = await LanguageModel.create();
+                this.languageModelInitialized = true;
+                console.log('✅ TabOracle: Global LanguageModel initialized successfully');
+                return;
+            }
+            
+            // Check for window.LanguageModel (another alternative)
+            if (typeof window !== 'undefined' && window.LanguageModel && window.LanguageModel.create) {
+                console.log('🔍 TabOracle: Window LanguageModel available, attempting to initialize...');
                 this.languageModel = await window.LanguageModel.create();
                 this.languageModelInitialized = true;
-                console.log('✅ TabOracle: window.LanguageModel initialized');
-            } else {
-                console.log('⚠️ TabOracle: On-device language model not available; will use fallback');
-                if (this.geminiNotice) this.geminiNotice.style.display = 'flex';
+                console.log('✅ TabOracle: Window LanguageModel initialized successfully');
+                return;
             }
+            
+            // No language model available
+            console.log('⚠️ TabOracle: No language model available on this system (Windows/older Chrome version)');
+            console.log('⚠️ TabOracle: Will use intelligent fallback for summaries');
+            this.languageModel = null;
+            this.languageModelInitialized = true; // Mark as initialized to avoid repeated checks
+            
+            // Show notice for Windows users
+            if (this.geminiNotice) {
+                this.geminiNotice.style.display = 'flex';
+                // Update notice text for Windows users
+                const noticeText = this.geminiNotice.querySelector('.notice-text');
+                if (noticeText) {
+                    noticeText.innerHTML = `
+                        <strong>AI Features Note:</strong><br>
+                        Chrome Language Model (Gemini Nano) may not be available on Windows yet.<br>
+                        TabOracle will use intelligent fallback for summaries.
+                    `;
+                }
+            }
+            
         } catch (e) {
             console.warn('⚠️ TabOracle: Language model init failed, using fallback', e);
             this.languageModel = null;
-            this.languageModelInitialized = false;
-            if (this.geminiNotice) this.geminiNotice.style.display = 'flex';
+            this.languageModelInitialized = true; // Mark as initialized to avoid repeated checks
+            if (this.geminiNotice) {
+                this.geminiNotice.style.display = 'flex';
+                const noticeText = this.geminiNotice.querySelector('.notice-text');
+                if (noticeText) {
+                    noticeText.innerHTML = `
+                        <strong>AI Features Note:</strong><br>
+                        Language model initialization failed.<br>
+                        TabOracle will use intelligent fallback for summaries.
+                    `;
+                }
+            }
         }
     }
 
@@ -61,9 +104,19 @@ class TabOraclePopup {
             console.log('🧪 TabOracle: Ensuring language model initialized...');
             await this.ensureLanguageModelInitialized();
             if (!this.languageModel || !this.languageModel.prompt) {
-                this.pageSummaryContent.innerHTML = `<div class="empty-state">AI not available on this device. Using fallback.</div>`;
+                console.log('⚠️ TabOracle: No AI model available, showing fallback message');
+                this.pageSummaryContent.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">🤖</div>
+                        <div><strong>AI Features Note</strong></div>
+                        <div>Chrome Language Model (Gemini Nano) is not available on this system.</div>
+                        <div>TabOracle will use intelligent fallback for summaries.</div>
+                        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                            This is normal on Windows or older Chrome versions.
+                        </div>
+                    </div>
+                `;
                 if (this.geminiNotice) this.geminiNotice.style.display = 'flex';
-                chrome.tabs.create({ url: 'chrome://flags/#prompt-api-for-gemini-nano' });
                 return;
             }
             this.setSummaryLoading(true, 'Testing on-device AI...');
@@ -158,18 +211,52 @@ class TabOraclePopup {
     }
 
     basicFallbackSummary(pageContent, pageTitle) {
+        console.log('🔄 TabOracle: Using intelligent fallback summary generation');
+        
         const words = (pageContent || '').split(/\s+/).filter(w => w.length > 2);
         const wordCount = words.length;
         const minutes = Math.max(1, Math.ceil(wordCount / 225));
-        const summary = `This page titled "${pageTitle || 'Untitled'}" contains ${wordCount} words. Estimated reading time: ${minutes} minute${minutes !== 1 ? 's' : ''}.`;
+        
+        // Extract key information from content
+        const sentences = (pageContent || '').split(/[.!?]+/).filter(s => s.trim().length > 10);
+        const firstFewSentences = sentences.slice(0, 3).join('. ').trim();
+        
+        // Try to identify content type
+        let contentType = 'webpage';
+        const lowerContent = pageContent.toLowerCase();
+        if (lowerContent.includes('research') || lowerContent.includes('study') || lowerContent.includes('paper')) {
+            contentType = 'research';
+        } else if (lowerContent.includes('documentation') || lowerContent.includes('api') || lowerContent.includes('guide')) {
+            contentType = 'documentation';
+        } else if (lowerContent.includes('news') || lowerContent.includes('article')) {
+            contentType = 'article';
+        } else if (lowerContent.includes('tutorial') || lowerContent.includes('how to')) {
+            contentType = 'tutorial';
+        }
+        
+        // Extract key points (simple approach)
+        const keyPoints = [];
+        const importantWords = ['important', 'key', 'main', 'primary', 'essential', 'critical'];
+        for (let i = 0; i < Math.min(5, sentences.length); i++) {
+            const sentence = sentences[i];
+            if (importantWords.some(word => sentence.toLowerCase().includes(word))) {
+                keyPoints.push(sentence.trim());
+            }
+        }
+        
+        // If no key points found, use first few sentences
+        if (keyPoints.length === 0 && sentences.length > 0) {
+            keyPoints.push(...sentences.slice(0, 3).map(s => s.trim()));
+        }
+        const summary = firstFewSentences || `This page titled "${pageTitle || 'Untitled'}" contains ${wordCount} words. Estimated reading time: ${minutes} minute${minutes !== 1 ? 's' : ''}.`;
         return {
             summary,
             mainTopic: pageTitle || 'This page',
-            keyPoints: [],
-            contentType: 'other',
+            keyPoints: keyPoints.slice(0, 5),
+            contentType: contentType,
             wordCount,
             estimatedReadingTime: `${minutes} minute${minutes !== 1 ? 's' : ''}`,
-            confidence: 0.5
+            confidence: 0.7
         };
     }
 
