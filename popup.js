@@ -56,7 +56,9 @@ class TabOraclePopup {
     }
 
     async handleTestLanguageModel() {
+        console.log('🧪 TabOracle: Starting Test AI...');
         try {
+            console.log('🧪 TabOracle: Ensuring language model initialized...');
             await this.ensureLanguageModelInitialized();
             if (!this.languageModel || !this.languageModel.prompt) {
                 this.pageSummaryContent.innerHTML = `<div class="empty-state">AI not available on this device. Using fallback.</div>`;
@@ -79,7 +81,9 @@ class TabOraclePopup {
     }
 
     async handleGenerateSummary() {
+        console.log('📝 TabOracle: Starting Generate Summary...');
         try {
+            console.log('📝 TabOracle: Setting loading state...');
             this.setSummaryLoading(true);
 
             // Get active tab id
@@ -214,6 +218,13 @@ class TabOraclePopup {
         this.testLanguageModelButton = document.getElementById('testLanguageModel');
         this.pageSummaryContent = document.getElementById('pageSummaryContent');
         
+        // Debug: Log button elements
+        console.log('🔍 TabOracle: Summary button elements found:', {
+            generateSummary: !!this.generateSummaryButton,
+            testLanguageModel: !!this.testLanguageModelButton,
+            pageSummaryContent: !!this.pageSummaryContent
+        });
+        
         this.geminiNotice = document.getElementById('geminiNotice');
         this.openFlagsButton = document.getElementById('openFlags');
         this.languageModel = null;
@@ -280,10 +291,32 @@ class TabOraclePopup {
         
         // Page summary actions
         if (this.testLanguageModelButton) {
-            this.testLanguageModelButton.addEventListener('click', () => this.handleTestLanguageModel());
+            console.log('🔍 TabOracle: Adding click listener to Test AI button');
+            this.testLanguageModelButton.addEventListener('click', () => {
+                console.log('🔍 TabOracle: Test AI button clicked');
+                this.handleTestLanguageModel();
+            });
+        } else {
+            console.error('❌ TabOracle: Test AI button not found');
         }
+        
+        // Test background service worker connection
+        console.log('🔍 TabOracle: Testing background service worker connection...');
+        chrome.runtime.sendMessage({ action: 'ping', data: 'popup-test' }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('❌ TabOracle: Background service worker not responding:', chrome.runtime.lastError);
+            } else {
+                console.log('✅ TabOracle: Background service worker responding:', response);
+            }
+        });
         if (this.generateSummaryButton) {
-            this.generateSummaryButton.addEventListener('click', () => this.handleGenerateSummary());
+            console.log('🔍 TabOracle: Adding click listener to Generate Summary button');
+            this.generateSummaryButton.addEventListener('click', () => {
+                console.log('🔍 TabOracle: Generate Summary button clicked');
+                this.handleGenerateSummary();
+            });
+        } else {
+            console.error('❌ TabOracle: Generate Summary button not found');
         }
         
         if (this.openFlagsButton) {
