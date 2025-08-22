@@ -1,98 +1,84 @@
 #!/bin/bash
 
 # TabOracle Chrome Web Store Packaging Script
-# This script prepares the extension for Chrome Web Store submission
+# This script creates a production-ready ZIP package for Chrome Web Store submission
 
-echo "🚀 TabOracle - Chrome Web Store Packaging Script"
-echo "=================================================="
+echo "🚀 TabOracle - Creating Chrome Web Store Package"
+echo "================================================"
 
-# Check if we're in the right directory
-if [ ! -f "manifest.json" ]; then
-    echo "❌ Error: manifest.json not found. Please run this script from the TabOracle directory."
-    exit 1
-fi
+# Set variables
+PACKAGE_NAME="taboracle-production"
+VERSION=$(grep '"version"' manifest.json | cut -d'"' -f4)
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+echo "📦 Version: $VERSION"
+echo "⏰ Timestamp: $TIMESTAMP"
 
 # Create temporary directory for packaging
-PACKAGE_DIR="taboracle-chrome-store"
-echo "📁 Creating package directory: $PACKAGE_DIR"
-rm -rf "$PACKAGE_DIR"
-mkdir -p "$PACKAGE_DIR"
+TEMP_DIR="temp-package"
+FINAL_PACKAGE="${PACKAGE_NAME}-v${VERSION}-${TIMESTAMP}.zip"
 
-# Copy essential extension files
-echo "📋 Copying extension files..."
-cp manifest.json "$PACKAGE_DIR/"
-cp popup.html "$PACKAGE_DIR/"
-cp popup.js "$PACKAGE_DIR/"
-cp popup.css "$PACKAGE_DIR/"
-cp background.js "$PACKAGE_DIR/"
-cp content.js "$PACKAGE_DIR/"
+echo "🧹 Cleaning up previous builds..."
+rm -rf "$TEMP_DIR"
+rm -f "$PACKAGE_NAME"*.zip
+
+echo "📁 Creating package directory..."
+mkdir -p "$TEMP_DIR"
+
+echo "📋 Copying essential files..."
+
+# Copy core extension files
+cp manifest.json "$TEMP_DIR/"
+cp popup.html "$TEMP_DIR/"
+cp popup.css "$TEMP_DIR/"
+cp popup.js "$TEMP_DIR/"
+cp background.js "$TEMP_DIR/"
+cp content.js "$TEMP_DIR/"
+cp offscreen.html "$TEMP_DIR/"
+cp offscreen.js "$TEMP_DIR/"
+cp gemini-manager.js "$TEMP_DIR/"
 
 # Copy icons (if they exist)
 if [ -f "icon16.png" ]; then
-    cp icon16.png "$PACKAGE_DIR/"
-    echo "✅ Copied icon16.png"
-else
-    echo "⚠️  Warning: icon16.png not found"
+    cp icon16.png "$TEMP_DIR/"
 fi
-
 if [ -f "icon48.png" ]; then
-    cp icon48.png "$PACKAGE_DIR/"
-    echo "✅ Copied icon48.png"
-else
-    echo "⚠️  Warning: icon48.png not found"
+    cp icon48.png "$TEMP_DIR/"
 fi
-
 if [ -f "icon128.png" ]; then
-    cp icon128.png "$PACKAGE_DIR/"
-    echo "✅ Copied icon128.png"
-else
-    echo "⚠️  Warning: icon128.png not found"
+    cp icon128.png "$TEMP_DIR/"
 fi
 
-# Copy SVG icon
-if [ -f "icon.svg" ]; then
-    cp icon.svg "$PACKAGE_DIR/"
-    echo "✅ Copied icon.svg"
+# Copy vendor directory if it exists
+if [ -d "vendor" ]; then
+    echo "📚 Copying vendor libraries..."
+    cp -r vendor "$TEMP_DIR/"
 fi
 
-# Create package ZIP file
-PACKAGE_NAME="taboracle-chrome-store-$(date +%Y%m%d).zip"
-echo "📦 Creating package: $PACKAGE_NAME"
+echo "🔍 Verifying package contents..."
+echo "Files in package:"
+ls -la "$TEMP_DIR/"
 
-cd "$PACKAGE_DIR"
-zip -r "../$PACKAGE_NAME" . -x "*.DS_Store" "*.git*" "*.md" "*.txt"
+echo "📦 Creating ZIP package..."
+cd "$TEMP_DIR"
+zip -r "../$FINAL_PACKAGE" . -x "*.DS_Store" "*.git*" "Thumbs.db"
 cd ..
 
-# Clean up temporary directory
 echo "🧹 Cleaning up temporary files..."
-rm -rf "$PACKAGE_DIR"
+rm -rf "$TEMP_DIR"
 
-# Display package information
-echo ""
-echo "🎉 Packaging Complete!"
-echo "====================="
-echo "📦 Package: $PACKAGE_NAME"
-echo "📁 Size: $(du -h "$PACKAGE_NAME" | cut -f1)"
-echo "📋 Files included:"
-echo "   - manifest.json"
-echo "   - popup.html, popup.js, popup.css"
-echo "   - background.js, content.js"
-echo "   - Icons (PNG and SVG)"
+echo "✅ Package created successfully!"
+echo "📁 Package: $FINAL_PACKAGE"
+echo "📏 Size: $(du -h "$FINAL_PACKAGE" | cut -f1)"
 
 echo ""
-echo "🚀 Next Steps for Chrome Web Store:"
-echo "1. Go to Chrome Web Store Developer Dashboard"
-echo "2. Click 'Add new item'"
-echo "3. Upload the ZIP file: $PACKAGE_NAME"
-echo "4. Fill in the store listing information"
-echo "5. Submit for review"
+echo "🎯 Next Steps:"
+echo "1. Upload $FINAL_PACKAGE to Chrome Web Store"
+echo "2. Add store assets (icons, screenshots, descriptions)"
+echo "3. Submit for review"
+echo ""
+echo "📋 Package Contents:"
+unzip -l "$FINAL_PACKAGE" | head -20
 
 echo ""
-echo "📚 Required for Store Listing:"
-echo "   - Extension description (see chrome-web-store-description.txt)"
-echo "   - Privacy policy (see PRIVACY_POLICY.md)"
-echo "   - Screenshots of the extension in action"
-echo "   - Promotional images"
-
-echo ""
-echo "✅ Package ready for Chrome Web Store submission!"
+echo "🚀 Ready for Chrome Web Store submission!"

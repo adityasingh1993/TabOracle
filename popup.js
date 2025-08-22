@@ -10,6 +10,27 @@ class TabOraclePopup {
         this.fixPopupHeight();
         window.addEventListener('resize', () => this.fixPopupHeight());
         this.loadTabs();
+        
+        // Refresh tabs when popup becomes visible (for new tabs)
+        this.setupTabRefresh();
+    }
+
+    setupTabRefresh() {
+        // Refresh tabs when the popup window gains focus
+        window.addEventListener('focus', () => {
+            console.log('🔄 TabOracle: Popup focused, refreshing tabs...');
+            this.loadTabs();
+        });
+        
+        // Also refresh when the popup is shown (alternative approach)
+        if (document.visibilityState) {
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    console.log('🔄 TabOracle: Popup visible, refreshing tabs...');
+                    this.loadTabs();
+                }
+            });
+        }
     }
 
     async ensureLanguageModelInitialized() {
@@ -319,6 +340,11 @@ class TabOraclePopup {
         
         // Footer
         this.tabCount = document.getElementById('tabCount');
+        
+        // Refresh button
+        this.refreshButton = document.getElementById('refreshButton');
+        
+
     }
 
     fixPopupHeight() {
@@ -376,13 +402,53 @@ class TabOraclePopup {
             }
         });
         
+        // Refresh button
+        if (this.refreshButton) {
+            this.refreshButton.addEventListener('click', () => {
+                console.log('🔄 TabOracle: Manual refresh requested');
+                this.loadTabs();
+            });
+        }
+        
         // Page summary actions
         if (this.testLanguageModelButton) {
             console.log('🔍 TabOracle: Adding click listener to Test AI button');
-            this.testLanguageModelButton.addEventListener('click', () => {
-                console.log('🔍 TabOracle: Test AI button clicked');
+            
+            // Add visual indicator that button is clickable
+            this.testLanguageModelButton.style.border = '2px solid #4CAF50';
+            this.testLanguageModelButton.title = 'Click to test AI (Debug: Button is clickable)';
+            
+            // Test if button is actually in DOM and visible
+            console.log('🔍 TabOracle: Test AI button properties:', {
+                offsetWidth: this.testLanguageModelButton.offsetWidth,
+                offsetHeight: this.testLanguageModelButton.offsetHeight,
+                style: this.testLanguageModelButton.style.display,
+                visible: this.testLanguageModelButton.offsetWidth > 0 && this.testLanguageModelButton.offsetHeight > 0
+            });
+            
+            // Try multiple event listeners for better compatibility
+            this.testLanguageModelButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('🔍 TabOracle: Test AI button clicked (click event)');
                 this.handleTestLanguageModel();
             });
+            
+            this.testLanguageModelButton.addEventListener('mousedown', (e) => {
+                console.log('🔍 TabOracle: Test AI button mousedown');
+            });
+            
+            this.testLanguageModelButton.addEventListener('mouseup', (e) => {
+                console.log('🔍 TabOracle: Test AI button mouseup');
+            });
+            
+            // Also try touch events for better compatibility
+            this.testLanguageModelButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                console.log('🔍 TabOracle: Test AI button touchstart');
+                this.handleTestLanguageModel();
+            });
+            
         } else {
             console.error('❌ TabOracle: Test AI button not found');
         }
@@ -398,13 +464,47 @@ class TabOraclePopup {
         });
         if (this.generateSummaryButton) {
             console.log('🔍 TabOracle: Adding click listener to Generate Summary button');
-            this.generateSummaryButton.addEventListener('click', () => {
-                console.log('🔍 TabOracle: Generate Summary button clicked');
+            
+            // Add visual indicator that button is clickable
+            this.generateSummaryButton.style.border = '2px solid #2196F3';
+            this.generateSummaryButton.title = 'Click to generate summary (Debug: Button is clickable)';
+            
+            // Test if button is actually in DOM and visible
+            console.log('🔍 TabOracle: Generate Summary button properties:', {
+                offsetWidth: this.generateSummaryButton.offsetWidth,
+                offsetHeight: this.generateSummaryButton.offsetHeight,
+                style: this.generateSummaryButton.style.display,
+                visible: this.generateSummaryButton.offsetWidth > 0 && this.generateSummaryButton.offsetHeight > 0
+            });
+            
+            // Try multiple event listeners for better compatibility
+            this.generateSummaryButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('🔍 TabOracle: Generate Summary button clicked (click event)');
                 this.handleGenerateSummary();
             });
+            
+            this.generateSummaryButton.addEventListener('mousedown', (e) => {
+                console.log('🔍 TabOracle: Generate Summary button mousedown');
+            });
+            
+            this.generateSummaryButton.addEventListener('mouseup', (e) => {
+                console.log('🔍 TabOracle: Generate Summary button mouseup');
+            });
+            
+            // Also try touch events for better compatibility
+            this.generateSummaryButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                console.log('🔍 TabOracle: Generate Summary button touchstart');
+                this.handleGenerateSummary();
+            });
+            
         } else {
             console.error('❌ TabOracle: Generate Summary button not found');
         }
+        
+
         
         if (this.openFlagsButton) {
             this.openFlagsButton.addEventListener('click', () => {
@@ -1163,12 +1263,16 @@ class TabOraclePopup {
     createTabElement(tab) {
         const isActive = tab.active;
         const isPinned = tab.pinned;
-        const favicon = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="#ccc"/></svg>';
+        const favicon = this.getFaviconUrl(tab);
         const category = this.getCategoryDisplay(tab);
         
+        const faviconHtml = favicon ? 
+            `<img class="tab-favicon" src="${favicon}" alt="favicon" onerror="this.style.display='none'; this.parentElement.classList.add('no-favicon');">` : 
+            '';
+        
         return `
-            <div class="tab-item ${isActive ? 'active' : ''} ${isPinned ? 'pinned' : ''}" data-tab-id="${tab.id}" data-window-id="${tab.windowId}">
-                <img class="tab-favicon" src="${favicon}" alt="favicon" onerror="this.src='data:image/svg+xml,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 16 16&quot;><rect width=&quot;16&quot; height=&quot;16&quot; fill=&quot;#ccc&quot;/></svg>'">
+            <div class="tab-item ${isActive ? 'active' : ''} ${isPinned ? 'pinned' : ''} ${!favicon ? 'no-favicon' : ''}" data-tab-id="${tab.id}" data-window-id="${tab.windowId}">
+                ${faviconHtml}
                 <div class="tab-content">
                     <div class="tab-title">
                         ${this.escapeHtml(tab.title)}
@@ -1180,6 +1284,46 @@ class TabOraclePopup {
                 <div class="tab-window">${this.getWindowDisplay(tab)}</div>
             </div>
         `;
+    }
+
+    getFaviconUrl(tab) {
+        // Debug logging
+        console.log('🔍 TabOracle: Getting favicon for tab:', {
+            id: tab.id,
+            title: tab.title,
+            url: tab.url,
+            favIconUrl: tab.favIconUrl
+        });
+        
+        // If we have a favicon URL, use it
+        if (tab.favIconUrl && tab.favIconUrl.trim() !== '') {
+            console.log('✅ TabOracle: Using existing favicon:', tab.favIconUrl);
+            return tab.favIconUrl;
+        }
+        
+        // For new tabs or tabs without favicon, try to generate one from the domain
+        if (tab.url && tab.url.startsWith('http')) {
+            try {
+                const url = new URL(tab.url);
+                const faviconUrl = `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
+                console.log('🌐 TabOracle: Using Google favicon service:', faviconUrl);
+                return faviconUrl;
+            } catch (e) {
+                console.warn('⚠️ TabOracle: URL parsing failed:', e);
+                // If URL parsing fails, return null
+                return null;
+            }
+        }
+        
+        // For chrome:// URLs, chrome-extension:// URLs, and new tabs, return null (no favicon)
+        if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url === 'chrome://newtab/')) {
+            console.log('🔧 TabOracle: No favicon for system URL:', tab.url);
+            return null;
+        }
+        
+        // Default fallback for invalid URLs
+        console.log('❓ TabOracle: No favicon available');
+        return null;
     }
 
     getTabPreviewContent(tab) {
@@ -1201,7 +1345,7 @@ class TabOraclePopup {
     }
 
     createSearchResultElement(tab, query) {
-        const favicon = tab.favIconUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="#ccc"/></svg>';
+        const favicon = this.getFaviconUrl(tab);
         const highlightedTitle = this.highlightText(tab.title, query);
         const highlightedUrl = this.highlightText(tab.url, query);
         const category = this.getCategoryDisplay(tab);
@@ -1211,11 +1355,15 @@ class TabOraclePopup {
         const hasContent = tab.context && tab.context.pageContent;
         const semanticMatches = tab.semanticMatches || [];
 
+        const faviconHtml = favicon ? 
+            `<img src="${favicon}" alt="favicon" onerror="this.style.display='none'; this.parentElement.classList.add('no-favicon');">` : 
+            '';
+
         return `
             <div class="tab-result" data-tab-id="${tab.id}" data-window-id="${tab.windowId}">
                 <div class="result-header">
-                    <div class="result-favicon">
-                        <img src="${favicon}" alt="favicon" onerror="this.src='data:image/svg+xml,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 16 16&quot;><rect width=&quot;16&quot; height=&quot;16&quot; fill=&quot;#ccc&quot;/></svg>'">
+                    <div class="result-favicon ${!favicon ? 'no-favicon' : ''}">
+                        ${faviconHtml}
                         ${isPinned ? '<span class="pin-indicator">📌</span>' : ''}
                     </div>
                     <div class="result-content">

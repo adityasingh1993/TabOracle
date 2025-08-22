@@ -182,6 +182,43 @@ body {
     top: var(--spacing-4);
     right: var(--spacing-5);
     z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+}
+
+.refresh-button {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--radius-full);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition-normal);
+    color: var(--primary-600);
+    backdrop-filter: blur(10px);
+}
+
+.refresh-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.05);
+}
+
+.refresh-button:active {
+    transform: scale(0.95);
+}
+
+.refresh-icon {
+    font-size: var(--font-size-sm);
+    transition: transform 0.3s ease;
+}
+
+.refresh-button:hover .refresh-icon {
+    transform: rotate(180deg);
 }
 
 .tab-counter {
@@ -487,6 +524,23 @@ body {
     border-radius: var(--radius-md);
     flex-shrink: 0;
     box-shadow: var(--shadow-xs);
+    background: var(--gray-100);
+    display: block;
+    object-fit: cover;
+    transition: opacity 0.2s ease;
+}
+
+.tab-favicon[src*="google.com/s2/favicons"] {
+    opacity: 0.8;
+}
+
+/* When favicon is hidden, adjust spacing */
+.tab-item.no-favicon .tab-content {
+    margin-left: 0;
+}
+
+.result-favicon.no-favicon {
+    display: none;
 }
 
 .tab-content {
@@ -950,6 +1004,26 @@ body {
     box-shadow: var(--shadow-xs);
 }
 
+.result-favicon {
+    flex-shrink: 0;
+    position: relative;
+}
+
+.result-favicon img {
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-xs);
+    background: var(--gray-100);
+    display: block;
+    object-fit: cover;
+    transition: opacity 0.2s ease;
+}
+
+.result-favicon img[src*="google.com/s2/favicons"] {
+    opacity: 0.8;
+}
+
 .ai-result-content {
     flex: 1;
     min-width: 0;
@@ -1002,6 +1076,12 @@ body {
     position: relative;
     overflow: hidden;
     min-height: 40px; /* Smaller touch target */
+    z-index: 10;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    pointer-events: auto;
 }
 
 .primary-button::before,

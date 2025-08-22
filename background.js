@@ -180,6 +180,18 @@ function updateTabList() {
         domain: extractDomain(tab.url), path: extractPath(tab.url), lastAccessed: Date.now(), contextScore: 0
       }));
       console.log('🔄 TabOracle: Processed', allTabs.length, 'tabs');
+      
+      // Debug: Log tabs with missing favicons
+      const tabsWithoutFavicons = allTabs.filter(tab => !tab.favIconUrl || tab.favIconUrl.trim() === '');
+      if (tabsWithoutFavicons.length > 0) {
+        console.log('⚠️ TabOracle: Tabs without favicons:', tabsWithoutFavicons.map(tab => ({
+          id: tab.id,
+          title: tab.title,
+          url: tab.url,
+          favIconUrl: tab.favIconUrl
+        })));
+      }
+      
       console.log('🔄 TabOracle: Sample tab:', allTabs[0]);
       chrome.storage.local.set({ 'allTabs': allTabs });
       allTabs.forEach(tab => { updateTabContext(tab.id); });
@@ -632,12 +644,17 @@ chrome.tabs.onCreated.addListener((tab) => {
   safeExecute(() => {
     console.log('🔄 TabOracle: Tab created:', tab.id, tab.title);
     updateTabList();
+    
+    // For new tabs, also update after a short delay to catch favicon updates
+    setTimeout(() => {
+      updateTabList();
+    }, 1000);
   }, 'tabCreated');
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   safeExecute(() => {
-    if (changeInfo.status === 'complete' || changeInfo.title || changeInfo.url) {
+    if (changeInfo.status === 'complete' || changeInfo.title || changeInfo.url || changeInfo.favIconUrl) {
       console.log('🔄 TabOracle: Tab updated:', tabId, changeInfo);
       updateTabList();
       // Update context when tab content changes
