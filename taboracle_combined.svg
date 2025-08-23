@@ -1,0 +1,135 @@
+<svg viewBox="0 0 320 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient for the crystal ball -->
+    <radialGradient id="crystalGradient" cx="0.3" cy="0.3" r="0.8">
+      <stop offset="0%" stop-color="#4b5563" stop-opacity="0.3"/>
+      <stop offset="30%" stop-color="#374151" stop-opacity="0.6"/>
+      <stop offset="70%" stop-color="#1f2937" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#111827" stop-opacity="1"/>
+    </radialGradient>
+    
+    <!-- Gradient for the base -->
+    <linearGradient id="baseGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#6b7280"/>
+      <stop offset="100%" stop-color="#374151"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Crystal ball base -->
+  <ellipse cx="40" cy="65" rx="20" ry="6" fill="url(#baseGradient)" opacity="0.7"/>
+  
+  <!-- Main crystal ball -->
+  <circle cx="40" cy="40" r="28" fill="url(#crystalGradient)" stroke="#d1d5db" stroke-width="1" opacity="0.9"/>
+  
+  <!-- Inner reflections -->
+  <circle cx="33" cy="32" r="8" fill="#ffffff" opacity="0.25"/>
+  <circle cx="30" cy="28" r="3" fill="#ffffff" opacity="0.4"/>
+  
+  <!-- Mystical sparkle -->
+  <g opacity="0.8">
+    <polygon points="15,20 17,24 21,22 17,26 15,30 13,26 9,22 13,24" fill="#fbbf24" opacity="0.6"/>
+  </g>
+  
+  <!-- Complex AI neural network and intelligence patterns -->
+  <g opacity="0.6">
+    <!-- Central AI brain core -->
+    <circle cx="40" cy="40" r="12" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.4"/>
+    <circle cx="40" cy="40" r="8" fill="none" stroke="#06d6a0" stroke-width="0.3" opacity="0.6"/>
+    
+    <!-- AI Neural network nodes (bright colors) -->
+    <!-- Input layer -->
+    <circle cx="22" cy="30" r="2" fill="#ffffff" opacity="0.9" stroke="#06d6a0" stroke-width="0.5"/>
+    <circle cx="22" cy="40" r="2" fill="#ffffff" opacity="0.9" stroke="#06d6a0" stroke-width="0.5"/>
+    <circle cx="22" cy="50" r="2" fill="#ffffff" opacity="0.9" stroke="#06d6a0" stroke-width="0.5"/>
+    
+    <!-- Hidden layer 1 -->
+    <circle cx="32" cy="25" r="2" fill="#ffffff" opacity="0.9" stroke="#14b8a6" stroke-width="0.5"/>
+    <circle cx="32" cy="35" r="2" fill="#ffffff" opacity="0.9" stroke="#14b8a6" stroke-width="0.5"/>
+    <circle cx="32" cy="45" r="2" fill="#ffffff" opacity="0.9" stroke="#14b8a6" stroke-width="0.5"/>
+    <circle cx="32" cy="55" r="2" fill="#ffffff" opacity="0.9" stroke="#14b8a6" stroke-width="0.5"/>
+    
+    <!-- Central AI processor -->
+    <circle cx="40" cy="35" r="2.5" fill="#ffffff" opacity="0.9" stroke="#0891b2" stroke-width="0.8"/>
+    <circle cx="40" cy="45" r="2.5" fill="#ffffff" opacity="0.9" stroke="#0891b2" stroke-width="0.8"/>
+    
+    <!-- Output layer -->
+    <circle cx="48" cy="30" r="2" fill="#ffffff" opacity="0.9" stroke="#0284c7" stroke-width="0.5"/>
+    <circle cx="48" cy="40" r="2" fill="#ffffff" opacity="0.9" stroke="#0284c7" stroke-width="0.5"/>
+    <circle cx="48" cy="50" r="2" fill="#ffffff" opacity="0.9" stroke="#0284c7" stroke-width="0.5"/>
+    
+    <!-- Enhanced neural connections -->
+    <g stroke="#ffffff" stroke-width="0.4" opacity="0.7" fill="none">
+      <!-- Input to hidden connections -->
+      <line x1="24" y1="30" x2="30" y2="25"/>
+      <line x1="24" y1="30" x2="30" y2="35"/>
+      <line x1="24" y1="40" x2="30" y2="35"/>
+      <line x1="24" y1="40" x2="30" y2="45"/>
+      <line x1="24" y1="50" x2="30" y2="45"/>
+      <line x1="24" y1="50" x2="30" y2="55"/>
+      
+      <!-- Hidden to central processor -->
+      <line x1="34" y1="25" x2="37.5" y2="35"/>
+      <line x1="34" y1="35" x2="37.5" y2="35"/>
+      <line x1="34" y1="45" x2="37.5" y2="45"/>
+      <line x1="34" y1="55" x2="37.5" y2="45"/>
+      
+      <!-- Central processor to output -->
+      <line x1="42.5" y1="35" x2="46" y2="30"/>
+      <line x1="42.5" y1="35" x2="46" y2="40"/>
+      <line x1="42.5" y1="45" x2="46" y2="40"/>
+      <line x1="42.5" y1="45" x2="46" y2="50"/>
+    </g>
+    
+    <!-- AI Circuit board patterns -->
+    <g stroke="#06d6a0" stroke-width="0.3" opacity="0.6" fill="none">
+      <!-- Horizontal circuits -->
+      <path d="M 25 28 L 30 28"/>
+      <path d="M 25 42 L 30 42"/>
+      <path d="M 25 52 L 30 52"/>
+      <path d="M 42 33 L 46 33"/>
+      <path d="M 42 47 L 46 47"/>
+      
+      <!-- Vertical circuits -->
+      <path d="M 40 30 L 40 32.5"/>
+      <path d="M 40 47.5 L 40 50"/>
+      
+      <!-- Circuit junctions -->
+      <circle cx="30" cy="28" r="0.8" fill="none" stroke="#14b8a6" stroke-width="0.3"/>
+      <circle cx="30" cy="42" r="0.8" fill="none" stroke="#14b8a6" stroke-width="0.3"/>
+      <circle cx="46" cy="33" r="0.8" fill="none" stroke="#14b8a6" stroke-width="0.3"/>
+    </g>
+    
+    <!-- AI Data flow particles (more prominent) -->
+    <g opacity="0.8">
+      <circle cx="27" cy="32" r="0.5" fill="#fbbf24">
+        <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite"/>
+        <animate attributeName="r" values="0.3;0.7;0.3" dur="1.5s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="37" cy="40" r="0.5" fill="#06d6a0">
+        <animate attributeName="opacity" values="1;0.3;1" dur="1.2s" repeatCount="indefinite"/>
+        <animate attributeName="r" values="0.7;0.3;0.7" dur="1.2s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="45" cy="36" r="0.5" fill="#f72585">
+        <animate attributeName="opacity" values="0.3;1;0.3" dur="1.8s" repeatCount="indefinite"/>
+        <animate attributeName="r" values="0.3;0.7;0.3" dur="1.8s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+    
+    <!-- Central AI indicator -->
+    <g opacity="0.8">
+      <circle cx="40" cy="40" r="1" fill="#ffffff">
+        <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+  </g>
+  
+  <!-- App name -->
+  <text x="90" y="45" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#ffffff">
+    Tab<tspan fill="#374151">Oracle</tspan>
+  </text>
+  
+  <!-- Tagline -->
+  <text x="90" y="65" font-family="Arial, sans-serif" font-size="12" fill="#d1d5db" opacity="0.9">
+    AI-Powered Tab Intelligence
+  </text>
+</svg>

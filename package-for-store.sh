@@ -38,6 +38,11 @@ cp offscreen.html "$TEMP_DIR/"
 cp offscreen.js "$TEMP_DIR/"
 cp gemini-manager.js "$TEMP_DIR/"
 
+# Copy custom SVG icons
+cp taboracle_icon_only.svg "$TEMP_DIR/"
+cp taboracle_text_only.svg "$TEMP_DIR/"
+cp taboracle_combined.svg "$TEMP_DIR/"
+
 # Copy icons (if they exist)
 if [ -f "icon16.png" ]; then
     cp icon16.png "$TEMP_DIR/"

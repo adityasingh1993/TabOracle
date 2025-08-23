@@ -1,0 +1,11 @@
+<svg viewBox="0 0 250 80" xmlns="http://www.w3.org/2000/svg">
+  <!-- App name -->
+  <text x="10" y="45" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#1f2937">
+    Tab<tspan fill="#8b5cf6">Oracle</tspan>
+  </text>
+  
+  <!-- Tagline -->
+  <text x="10" y="65" font-family="Arial, sans-serif" font-size="14" fill="#6b7280" opacity="0.8">
+    AI-Powered Tab Intelligence
+  </text>
+</svg>

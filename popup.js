@@ -1,18 +1,57 @@
 // Popup script for TabOracle with Tabbed Interface
 class TabOraclePopup {
     constructor() {
-        this.allTabs = [];
-        this.currentTab = 'normal';
+        // Initialize UI elements
+        this.searchInput = document.getElementById('searchInput');
+        this.tabsList = document.getElementById('tabsList');
+        this.searchResults = document.getElementById('searchResults');
+        this.tabCounter = document.getElementById('tabCounter');
+        this.refreshButton = document.getElementById('refreshButton');
+        
+        // Initialize tab navigation
+        this.searchTabs = document.querySelectorAll('.nav-tab');
+        this.tabContents = document.querySelectorAll('.tab-panel');
+        
+        // Initialize category elements
+        this.categoriesGrid = document.getElementById('categoriesGrid');
+        this.categoryResults = document.getElementById('categoryResults');
+        
+        // Initialize AI elements
+        this.aiSearchInput = document.getElementById('aiSearchInput');
+        this.aiSearchButton = document.getElementById('aiSearchButton');
+        this.aiResults = document.getElementById('aiResults');
+        this.aiLoading = document.getElementById('aiLoading');
+        
+        // Initialize summary elements
+        this.summaryInput = document.getElementById('summaryInput');
+        this.summaryButton = document.getElementById('summaryButton');
+        this.summaryResults = document.getElementById('summaryResults');
+        this.summaryLoading = document.getElementById('summaryLoading');
+        
+        // Initialize additional elements needed for tab switching
         this.initializeElements();
+        
+        // Debug: Log what elements were found
+        console.log('🔍 TabOracle: Constructor initialization complete');
+        console.log('🔍 TabOracle: Found elements:', {
+            searchTabs: this.searchTabs?.length || 0,
+            tabContents: this.tabContents?.length || 0,
+            searchInput: !!this.searchInput,
+            tabsList: !!this.tabsList,
+            categoriesGrid: !!this.categoriesGrid
+        });
+        
+        // Setup event listeners
         this.setupEventListeners();
-        // Ensure the default tab content is visible on load
+        this.setupTabRefresh();
+        
+        // Set default tab and load initial content
+        this.currentTab = 'normalSearchTab';
         this.switchTab('normalSearchTab');
+        
+        // Fix popup height
         this.fixPopupHeight();
         window.addEventListener('resize', () => this.fixPopupHeight());
-        this.loadTabs();
-        
-        // Refresh tabs when popup becomes visible (for new tabs)
-        this.setupTabRefresh();
     }
 
     setupTabRefresh() {
@@ -1581,6 +1620,8 @@ class TabOraclePopup {
             console.error('Failed to activate tab:', error);
         }
     }
+
+
 }
 
 // Initialize the popup when DOM is loaded
