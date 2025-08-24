@@ -875,6 +875,19 @@ body {
     box-shadow: var(--shadow-sm);
     position: relative;
     overflow: hidden;
+    user-select: none;
+}
+
+.category-card:hover {
+    border-color: var(--primary-400);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(168, 85, 247, 0.02));
+}
+
+.category-card:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-sm);
 }
 
 .category-card::before {
@@ -889,12 +902,6 @@ body {
     transition: var(--transition-normal);
 }
 
-.category-card:hover {
-    border-color: var(--primary-400);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-}
-
 .category-card:hover::before {
     opacity: 1;
 }
@@ -902,12 +909,20 @@ body {
 .category-icon {
     font-size: 2rem;
     color: var(--primary-600);
-    margin-bottom: var(--spacing-2);
+    margin-bottom: var(--spacing-3);
     transition: var(--transition-normal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    height: auto;
+    background: none;
+    border: none;
 }
 
 .category-card:hover .category-icon {
-    transform: scale(1.05);
+    transform: scale(1.1);
+    color: var(--primary-700);
 }
 
 .category-name {
@@ -1489,4 +1504,75 @@ body {
 
 .debug-output .warning {
     color: #f59e0b;
+}
+
+/* Custom category icons */
+.custom-icon {
+    position: relative;
+    width: auto;
+    height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    background: none;
+    border: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* All custom icon classes now use simple emoji display */
+.dev-icon::before,
+.code-icon::before,
+.mobile-icon::before,
+.web-icon::before,
+.devops-icon::before,
+.game-icon::before,
+.ai-icon::before,
+.data-icon::before,
+.docs-icon::before,
+.learn-icon::before,
+.edu-icon::before,
+.tutorial-icon::before,
+.research-icon::before,
+.email-icon::before,
+.chat-icon::before,
+.comm-icon::before,
+.social-icon::before,
+.media-icon::before,
+.music-icon::before,
+.video-icon::before,
+.design-icon::before,
+.photo-icon::before,
+.entertainment-icon::before,
+.news-icon::before,
+.info-icon::before,
+.search-icon::before,
+.analytics-icon::before,
+.report-icon::before,
+.shop-icon::before,
+.finance-icon::before,
+.bank-icon::before,
+.trading-icon::before,
+.ecommerce-icon::before,
+.productivity-icon::before,
+.work-icon::before,
+.calendar-icon::before,
+.task-icon::before,
+.file-icon::before,
+.security-icon::before,
+.fitness-icon::before,
+.food-icon::before,
+.travel-icon::before,
+.home-icon::before,
+.transport-icon::before,
+.health-icon::before {
+    font-size: 2rem;
+    color: var(--primary-600);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover effects for custom icons */
+.category-card:hover .custom-icon::before {
+    transform: scale(1.1);
+    color: var(--primary-700);
 }

@@ -3,301 +3,204 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TabOracle Explain Me - Test Page</title>
+    <title>TabOracle - Explain Me Test</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             max-width: 800px;
-            margin: 50px auto;
-            padding: 20px;
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            margin: 0 auto;
+            padding: 40px 20px;
             line-height: 1.6;
+            color: #333;
         }
-        
         .test-section {
-            background: white;
-            padding: 30px;
-            margin: 30px 0;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
             border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.1);
-            border: 1px solid rgba(139, 92, 246, 0.2);
+            padding: 24px;
+            margin: 24px 0;
         }
-        
-        .test-section h2 {
-            color: #6d28d9;
-            margin-top: 0;
-        }
-        
-        .sample-text {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
+        .test-text {
+            background: white;
+            border: 2px solid #8b5cf6;
             border-radius: 8px;
             padding: 20px;
             margin: 20px 0;
-            line-height: 1.8;
             font-size: 16px;
+            line-height: 1.8;
         }
-        
-        .instruction {
-            background: rgba(139, 92, 246, 0.1);
-            border-left: 4px solid #8b5cf6;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 0 8px 8px 0;
-        }
-        
-        .instruction h3 {
-            color: #6d28d9;
-            margin-top: 0;
-        }
-        
-        .instruction ol {
-            margin: 10px 0;
-            padding-left: 20px;
-        }
-        
-        .instruction li {
-            margin: 8px 0;
-            color: #6d28d9;
-        }
-        
-        .feature-list {
-            background: rgba(139, 92, 246, 0.08);
-            border-left: 4px solid #8b5cf6;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 0 8px 8px 0;
-        }
-        
-        .feature-list h3 {
-            color: #6d28d9;
-            margin-top: 0;
-        }
-        
-        .feature-list ul {
-            margin: 10px 0;
-            padding-left: 20px;
-        }
-        
-        .feature-list li {
-            margin: 8px 0;
-            color: #6d28d9;
-        }
-        
-        .highlight {
+        .instructions {
             background: #fef3c7;
-            color: #92400e;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-weight: 600;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
         }
-        
-        .status {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
+        .debug-info {
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+            font-family: monospace;
             font-size: 14px;
-            font-weight: 500;
-            margin: 10px 5px;
         }
-        
-        .status.success { background: #d1fae5; color: #065f46; }
-        .status.info { background: rgba(139, 92, 246, 0.15); color: #6d28d9; }
-        .status.warning { background: #fef3c7; color: #92400e; }
-        
-        h1 {
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            text-align: center;
-            font-size: 32px;
+        h1, h2 {
+            color: #1f2937;
+        }
+        .highlight {
+            background: #fbbf24;
+            padding: 2px 4px;
+            border-radius: 4px;
         }
     </style>
 </head>
 <body>
+    <h1>🧠 TabOracle - Explain Me Test Page</h1>
+    
     <div class="test-section">
-        <h1>🔍 TabOracle Explain Me - Test Page</h1>
-        <p>This page demonstrates the new "Explain Me" feature that allows you to select text and get AI-powered explanations.</p>
-        
-        <div class="status success">✅ Explain Me Feature: Active</div>
-        <div class="status info">🎯 Feature: AI-Powered Text Explanation</div>
-        <div class="status warning">💡 Tip: Select any text below and right-click to see "🔍 Explain Me"</div>
-    </div>
-
-    <div class="test-section">
-        <h2>📚 Sample Technical Text</h2>
-        <div class="instruction">
-            <h3>🎯 How to Test:</h3>
+        <h2>📋 Test Instructions</h2>
+        <div class="instructions">
+            <p><strong>To test the Explain Me feature:</strong></p>
             <ol>
-                <li><strong>Select Text:</strong> Click and drag to select any text below</li>
-                <li><strong>Right-Click:</strong> Right-click on the selected text</li>
-                <li><strong>Choose "🔍 Explain Me":</strong> Click the context menu option</li>
-                <li><strong>View Explanation:</strong> See AI-powered explanation in overlay</li>
+                <li>Select any text below (highlight it with your mouse)</li>
+                <li>Right-click on the selected text</li>
+                <li>Choose "Explain me TabOracle" from the context menu</li>
+                <li>Check if the selected text appears in the popup</li>
+                <li>Check the browser console for debugging information</li>
             </ol>
         </div>
-        
-        <div class="sample-text">
-            <strong>Machine Learning Fundamentals</strong><br><br>
-            
-            Machine learning is a subset of artificial intelligence that enables computers to learn and improve from experience without being explicitly programmed. The core concept revolves around algorithms that can identify patterns in data and make predictions or decisions based on those patterns.<br><br>
-            
-            <strong>Key Components:</strong><br>
-            • <strong>Training Data:</strong> The dataset used to teach the model<br>
-            • <strong>Features:</strong> Individual measurable properties or characteristics<br>
-            • <strong>Model:</strong> The mathematical representation of the learned patterns<br>
-            • <strong>Algorithm:</strong> The method used to find patterns in the data<br><br>
-            
-            <strong>Types of Machine Learning:</strong><br>
-            1. <strong>Supervised Learning:</strong> Learning from labeled examples (classification, regression)<br>
-            2. <strong>Unsupervised Learning:</strong> Finding hidden patterns in unlabeled data (clustering, dimensionality reduction)<br>
-            3. <strong>Reinforcement Learning:</strong> Learning through interaction with an environment<br><br>
-            
-            <strong>Applications:</strong><br>
-            Machine learning is widely used in various industries including healthcare (disease diagnosis), finance (fraud detection), marketing (customer segmentation), and autonomous vehicles (object recognition). The technology continues to evolve rapidly, with new algorithms and applications being developed constantly.
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 Test Text 1: Simple Content</h2>
+        <div class="test-text">
+            <p>This is a simple paragraph for testing the Explain Me feature. It contains basic information that should be easy to explain. The text is straightforward and doesn't contain any complex formatting or special characters.</p>
         </div>
     </div>
 
     <div class="test-section">
-        <h2>🔬 Sample Research Content</h2>
-        <div class="sample-text">
-            <strong>Quantum Computing Principles</strong><br><br>
-            
-            Quantum computing represents a paradigm shift in computational technology, leveraging the principles of quantum mechanics to process information in ways that classical computers cannot. Unlike classical bits that exist in binary states (0 or 1), quantum bits or qubits can exist in superposition states, representing multiple values simultaneously.<br><br>
-            
-            <strong>Quantum Phenomena:</strong><br>
-            • <strong>Superposition:</strong> Qubits can be in multiple states at once<br>
-            • <strong>Entanglement:</strong> Qubits can be correlated across vast distances<br>
-            • <strong>Interference:</strong> Quantum states can interfere constructively or destructively<br><br>
-            
-            <strong>Potential Applications:</strong><br>
-            Quantum computers could revolutionize fields such as cryptography, drug discovery, optimization problems, and artificial intelligence. However, significant challenges remain in maintaining quantum coherence and scaling up the number of qubits while minimizing error rates.
+        <h2>📚 Test Text 2: Technical Content</h2>
+        <div class="test-text">
+            <p>Machine learning is a subset of artificial intelligence that focuses on algorithms and statistical models to enable computers to improve their performance on a specific task through experience. These algorithms build mathematical models based on sample data, known as training data, to make predictions or decisions without being explicitly programmed to perform the task.</p>
         </div>
     </div>
 
     <div class="test-section">
-        <h2>💻 Sample Code Documentation</h2>
-        <div class="sample-text">
-            <strong>React Hooks Overview</strong><br><br>
-            
-            React Hooks are functions that allow you to use state and other React features in functional components. Introduced in React 16.8, hooks provide a way to use stateful logic between components without changing their hierarchy.<br><br>
-            
-            <strong>Core Hooks:</strong><br>
-            • <strong>useState:</strong> Manages local state in functional components<br>
-            • <strong>useEffect:</strong> Handles side effects and lifecycle methods<br>
-            • <strong>useContext:</strong> Consumes React context without nesting<br>
-            • <strong>useReducer:</strong> Manages complex state logic<br><br>
-            
-            <strong>Custom Hooks:</strong><br>
-            Developers can create custom hooks to extract component logic into reusable functions. This promotes code reuse and separation of concerns, making components more focused and easier to test.
+        <h2>🌍 Test Text 3: News Content</h2>
+        <div class="test-text">
+            <p>Climate change refers to long-term shifts in global weather patterns and average temperatures. While climate has changed throughout Earth's history, the current warming trend is of particular significance because it is unequivocally the result of human activity since the mid-20th century and proceeding at a rate that is unprecedented over millennia.</p>
         </div>
     </div>
 
     <div class="test-section">
-        <h2>🌟 Feature Benefits</h2>
-        <div class="feature-list">
-            <h3>✨ What Explain Me Provides:</h3>
-            <ul>
-                <li><strong>Instant Understanding:</strong> Get explanations for complex concepts immediately</li>
-                <li><strong>Context-Aware:</strong> AI analyzes the specific text you selected</li>
-                <li><strong>Structured Explanations:</strong> Clear breakdowns with key points and examples</li>
-                <li><strong>Fallback Support:</strong> Works even when AI features aren't available</li>
-                <li><strong>Non-Intrusive:</strong> Overlay doesn't interfere with page functionality</li>
-                <li><strong>Keyboard Accessible:</strong> Use Escape key to close overlay</li>
-            </ul>
-        </div>
-        
-        <div class="feature-list">
-            <h3>🎯 Perfect For:</h3>
-            <ul>
-                <li><strong>Students:</strong> Understanding complex academic texts</li>
-                <li><strong>Professionals:</strong> Quick explanations of technical documentation</li>
-                <li><strong>Researchers:</strong> Breaking down complex research papers</li>
-                <li><strong>General Users:</strong> Understanding unfamiliar concepts or jargon</li>
-            </ul>
+        <h2>🐛 Debug Information</h2>
+        <div class="debug-info">
+            <p><strong>Current Selection:</strong> <span id="current-selection">None</span></p>
+            <p><strong>Selection Length:</strong> <span id="selection-length">0</span></p>
+            <p><strong>Page URL:</strong> <span id="page-url"></span></p>
+            <p><strong>Extension Status:</strong> <span id="extension-status">Checking...</span></p>
         </div>
     </div>
 
     <div class="test-section">
-        <h2>🧪 Testing Instructions</h2>
-        
-        <div class="instruction">
-            <h3>🎯 Test the Feature:</h3>
-            <ol>
-                <li><strong>Select Text:</strong> Choose any text from the samples above</li>
-                <li><strong>Right-Click:</strong> Right-click on the selected text</li>
-                <li><strong>Look for "🔍 Explain Me":</strong> In the context menu</li>
-                <li><strong>Click Explain Me:</strong> See the overlay appear</li>
-                <li><strong>Wait for AI:</strong> Let the AI analyze and explain</li>
-                <li><strong>Read Explanation:</strong> View the structured explanation</li>
-                <li><strong>Close Overlay:</strong> Click outside or press Escape</li>
-            </ol>
-        </div>
-        
-        <div class="feature-list">
-            <h3>Expected Behavior</h3>
-            <ul>
-                <li>Context menu shows "🔍 Explain Me" option when text is selected</li>
-                <li>Overlay appears with selected text displayed</li>
-                <li>Loading animation shows while AI processes</li>
-                <li>Structured explanation appears with formatting</li>
-                <li>Overlay can be closed by clicking outside or pressing Escape</li>
-                <li>No interference with existing page functionality</li>
-            </ul>
-        </div>
-    </div>
-
-    <div class="test-section">
-        <h2>🔧 Technical Implementation</h2>
-        
-        <div class="feature-list">
-            <h3>How It Works:</h3>
-            <ul>
-                <li><strong>Background Script:</strong> Creates context menu on extension install</strong></li>
-                <li><strong>Content Script:</strong> Handles overlay creation and AI interaction</li>
-                <li><strong>Language Model:</strong> Uses Chrome Language Model API when available</li>
-                <li><strong>Fallback System:</strong> Intelligent text analysis when AI isn't available</li>
-                <li><strong>Message Passing:</strong> Communication between background and content scripts</li>
-            </ul>
-        </div>
-        
-        <div class="feature-list">
-            <h3>AI Prompt Structure:</h3>
-            <ul>
-                <li><strong>Role Definition:</strong> Expert educator and explainer</li>
-                <li><strong>Structured Output:</strong> Simple summary, key concepts, context, examples</li>
-                <li><strong>Formatting:</strong> Clear language with bullet points and headings</li>
-                <li><strong>Context:</strong> Selected text provided for analysis</li>
-            </ul>
-        </div>
+        <h2>🔧 Manual Test</h2>
+        <button id="test-button" style="background: #8b5cf6; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px;">
+            Test Explain Me with Sample Text
+        </button>
+        <div id="test-result" style="margin-top: 16px; padding: 16px; border-radius: 8px; display: none;"></div>
     </div>
 
     <script>
-        // Add some interactivity to the test page
-        document.addEventListener('DOMContentLoaded', function() {
-            // Highlight test sections on hover
-            const testSections = document.querySelectorAll('.test-section');
-            testSections.forEach(section => {
-                section.addEventListener('mouseenter', function() {
-                    this.style.transform = 'translateY(-2px)';
-                    this.style.boxShadow = '0 6px 25px rgba(139, 92, 246, 0.15)';
-                    this.style.transition = 'all 0.3s ease';
-                });
-                
-                section.addEventListener('mouseleave', function() {
-                    this.style.transform = 'translateY(0)';
-                    this.style.boxShadow = '0 4px 20px rgba(139, 92, 246, 0.1)';
-                });
-            });
+        // Update debug information
+        function updateDebugInfo() {
+            const selection = window.getSelection();
+            const selectedText = selection.toString();
             
-            // Add selection highlighting
-            document.addEventListener('selectionchange', function() {
-                const selection = window.getSelection();
-                if (selection.toString().length > 0) {
-                    console.log('🔍 TabOracle: Text selected:', selection.toString().substring(0, 50) + '...');
+            document.getElementById('current-selection').textContent = selectedText || 'None';
+            document.getElementById('selection-length').textContent = selectedText ? selectedText.length : 0;
+            document.getElementById('page-url').textContent = window.location.href;
+        }
+
+        // Check extension status
+        function checkExtensionStatus() {
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+                document.getElementById('extension-status').textContent = '✅ Extension Available';
+                document.getElementById('extension-status').style.color = '#059669';
+            } else {
+                document.getElementById('extension-status').textContent = '❌ Extension Not Available';
+                document.getElementById('extension-status').style.color = '#dc2626';
+            }
+        }
+
+        // Test button functionality
+        document.getElementById('test-button').addEventListener('click', async () => {
+            const testResult = document.getElementById('test-result');
+            testResult.style.display = 'block';
+            testResult.style.background = '#f3f4f6';
+            testResult.style.border = '1px solid #d1d5db';
+            testResult.style.borderRadius = '8px';
+            testResult.innerHTML = 'Testing...';
+
+            try {
+                // Test with sample text
+                const testText = "This is a test of the Explain Me feature. It should display properly in the overlay.";
+                
+                if (typeof chrome !== 'undefined' && chrome.tabs) {
+                    // Try to send message to content script
+                    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                        if (tabs[0]) {
+                            chrome.tabs.sendMessage(tabs[0].id, {
+                                action: 'debug',
+                                testText: testText
+                            }, (response) => {
+                                if (chrome.runtime.lastError) {
+                                    testResult.style.background = '#fef2f2';
+                                    testResult.style.border = '1px solid #fecaca';
+                                    testResult.innerHTML = `❌ Test failed: ${chrome.runtime.lastError.message}`;
+                                } else if (response && response.success) {
+                                    testResult.style.background = '#f0fdf4';
+                                    testResult.style.border = '1px solid #bbf7d0';
+                                    testResult.innerHTML = `✅ Test successful: ${response.message}`;
+                                } else {
+                                    testResult.style.background = '#fffbeb';
+                                    testResult.style.border = '1px solid #fed7aa';
+                                    testResult.innerHTML = `⚠️ Test response: ${JSON.stringify(response)}`;
+                                }
+                            });
+                        } else {
+                            testResult.style.background = '#fef2f2';
+                            testResult.style.border = '1px solid #fecaca';
+                            testResult.innerHTML = '❌ No active tab found';
+                        }
+                    });
+                } else {
+                    testResult.style.background = '#fef2f2';
+                    testResult.style.border = '1px solid #fecaca';
+                    testResult.innerHTML = '❌ Chrome extension APIs not available';
                 }
-            });
+            } catch (error) {
+                testResult.style.background = '#fef2f2';
+                testResult.style.border = '1px solid #fecaca';
+                testResult.innerHTML = `❌ Test error: ${error.message}`;
+            }
         });
+
+        // Update debug info when selection changes
+        document.addEventListener('selectionchange', updateDebugInfo);
+        
+        // Initial setup
+        updateDebugInfo();
+        checkExtensionStatus();
+        
+        // Log page load
+        console.log('🧠 TabOracle: Explain Me test page loaded');
+        console.log('🧠 TabOracle: Page URL:', window.location.href);
+        console.log('🧠 TabOracle: Chrome available:', typeof chrome !== 'undefined');
+        if (typeof chrome !== 'undefined') {
+            console.log('🧠 TabOracle: Chrome runtime:', !!chrome.runtime);
+            console.log('🧠 TabOracle: Chrome tabs:', !!chrome.tabs);
+        }
     </script>
 </body>
 </html>

@@ -52,6 +52,12 @@ class TabOraclePopup {
         this.currentTab = 'normalSearchTab';
         this.switchTab('normalSearchTab');
         
+        // Debug: Check if tabs were loaded
+        console.log('🔍 TabOracle: After switchTab, checking state...');
+        console.log('🔍 TabOracle: allTabs length:', this.allTabs?.length || 'undefined');
+        console.log('🔍 TabOracle: tabsList display:', this.tabsList?.style.display);
+        console.log('🔍 TabOracle: searchResults display:', this.searchResults?.style.display);
+        
         // Fix popup height
         this.fixPopupHeight();
         window.addEventListener('resize', () => this.fixPopupHeight());
@@ -530,12 +536,20 @@ class TabOraclePopup {
         
         // Category selection
         if (this.categoriesGrid) {
+            console.log('🎯 TabOracle: Setting up category click handling...');
+            
+            // Event delegation approach
             this.categoriesGrid.addEventListener('click', (e) => {
-                if (e.target.closest('.category-card')) {
-                    const category = e.target.closest('.category-card').dataset.category;
+                const categoryCard = e.target.closest('.category-card');
+                if (categoryCard) {
+                    const category = categoryCard.dataset.category;
+                    console.log('🎯 TabOracle: Category clicked via delegation:', category);
                     this.showCategoryResults(category);
                 }
             });
+            
+            // Also add direct event listeners for better compatibility
+            this.addCategoryClickListeners();
         }
         
         // Debug button (removed)
@@ -833,6 +847,11 @@ class TabOraclePopup {
     renderCategories() {
         const categories = this.getCategories();
         this.categoriesGrid.innerHTML = categories.map(category => this.createCategoryCard(category)).join('');
+        
+        // Add click event listeners to category cards
+        this.addCategoryClickListeners();
+        
+        console.log('🏷️ TabOracle: Categories rendered and click listeners added');
     }
 
     renderCategoriesFromBackground(categories) {
@@ -843,8 +862,19 @@ class TabOraclePopup {
             return;
         }
         
+        // Store background categories for use in showCategoryResults
+        this.backgroundCategories = categories;
+        console.log('🏷️ TabOracle: Stored background categories:', Object.keys(this.backgroundCategories));
+        
         // Convert background script categories to UI format
         const categoryCards = Object.entries(categories).map(([categoryName, tabs]) => {
+            console.log(`🏷️ TabOracle: Creating card for category: "${categoryName}" with ${tabs.length} tabs`);
+            
+            // Handle empty categories
+            if (tabs.length === 0) {
+                console.log(`🏷️ TabOracle: Category "${categoryName}" is empty, will show empty state`);
+            }
+            
             return this.createCategoryCard({
                 name: categoryName,
                 count: tabs.length,
@@ -855,7 +885,45 @@ class TabOraclePopup {
         }).join('');
         
         this.categoriesGrid.innerHTML = categoryCards;
+        
+        // Add click event listeners to category cards
+        this.addCategoryClickListeners();
+        
         console.log('🏷️ TabOracle: Categories rendered from background script');
+    }
+
+    addCategoryClickListeners() {
+        console.log('🎯 TabOracle: Adding category click listeners...');
+        const categoryCards = this.categoriesGrid.querySelectorAll('.category-card');
+        console.log('🎯 TabOracle: Found category cards:', categoryCards.length);
+        
+        categoryCards.forEach((card, index) => {
+            const categoryName = card.getAttribute('data-category');
+            console.log(`🎯 TabOracle: Adding click listener to card ${index + 1}:`, categoryName);
+            
+            // Remove any existing listeners to prevent duplicates
+            card.removeEventListener('click', card._categoryClickHandler);
+            
+            // Create and store the click handler
+            card._categoryClickHandler = () => {
+                console.log('🏷️ TabOracle: Category clicked:', categoryName);
+                console.log('🏷️ TabOracle: Background categories available:', this.backgroundCategories ? Object.keys(this.backgroundCategories) : 'None');
+                console.log('🏷️ TabOracle: Category exists in background:', this.backgroundCategories && this.backgroundCategories[categoryName] ? 'Yes' : 'No');
+                if (this.backgroundCategories && this.backgroundCategories[categoryName]) {
+                    console.log('🏷️ TabOracle: Category tabs count:', this.backgroundCategories[categoryName].length);
+                }
+                this.showCategoryResults(categoryName);
+            };
+            
+            // Add the click listener
+            card.addEventListener('click', card._categoryClickHandler);
+            
+            // Add visual feedback that the card is clickable
+            card.style.cursor = 'pointer';
+            card.title = `Click to view ${categoryName} tabs`;
+        });
+        
+        console.log('🎯 TabOracle: Category click listeners added successfully');
     }
 
     async forceRefreshTabs() {
@@ -1256,50 +1324,116 @@ class TabOraclePopup {
 
     createCategoryCard(category) {
         const icon = this.getCategoryIcon(category.name);
-        const confidence = Math.round(category.confidence);
         const topKeywords = category.keywords
             .filter((kw, index, arr) => arr.indexOf(kw) === index) // Remove duplicates
             .slice(0, 3); // Top 3 keywords
         
+        console.log(`🏷️ TabOracle: Creating category card for: ${category.name} with icon: ${icon}`);
+        
+        // Add visual indication for empty categories
+        const isEmpty = category.count === 0;
+        const emptyStyle = isEmpty ? 'opacity: 0.6; filter: grayscale(0.3);' : '';
+        const emptyTitle = isEmpty ? ` (Empty - No tabs in this category)` : '';
+        
         return `
-            <div class="category-card" data-category="${category.name}">
+            <div class="category-card" data-category="${category.name}" style="cursor: pointer; ${emptyStyle}" title="Click to view ${category.name} tabs${emptyTitle}">
                 <span class="category-icon">${icon}</span>
                 <div class="category-name">${category.name}</div>
                 <div class="category-count">${category.count} tabs</div>
-                <div class="category-confidence">Confidence: ${confidence}%</div>
+                ${isEmpty ? '<div class="category-empty-indicator">📭 Empty</div>' : ''}
                 ${topKeywords.length > 0 ? `<div class="category-keywords">${topKeywords.join(', ')}</div>` : ''}
             </div>
         `;
     }
 
     getCategoryIcon(categoryName) {
+        // Direct emoji mapping for categories
         const iconMap = {
             '💻 Development': '💻',
-            '📚 Documentation': '📚',
-            '📧 Email': '📧',
-            '🎥 Media': '🎥',
+            '👥 Social': '👥',
             '📰 News': '📰',
             '🛒 Shopping': '🛒',
-            '👥 Social': '👥',
             '⚡ Productivity': '⚡',
-            '💰 Finance': '💰',
-            '🔍 Search': '🔍'
+            '🎥 Media': '🎥',
+            '🔧 Programming': '🔧',
+            '📚 Documentation': '📚',
+            '🔍 Search': '🔍',
+            '🏷️ Other': '🏷️'
         };
-        return iconMap[categoryName] || '🏷️';
+        
+        // Try to find exact match first
+        if (iconMap[categoryName]) {
+            return iconMap[categoryName];
+        }
+        
+        // Try to find partial matches
+        for (const [key, icon] of Object.entries(iconMap)) {
+            if (categoryName.toLowerCase().includes(key.toLowerCase().replace(/[^\w\s]/g, ''))) {
+                return icon;
+            }
+        }
+        
+        // Return default icon if no match found
+        return '🏷️';
     }
 
     async showCategoryResults(categoryName) {
-        const category = this.getCategories().find(c => c.name === categoryName);
-        if (!category) return;
+        console.log('🏷️ TabOracle: Showing results for category:', categoryName);
+        
+        let category = null;
+        
+        // First try to find category in background categories
+        if (this.backgroundCategories && this.backgroundCategories[categoryName]) {
+            console.log('🏷️ TabOracle: Found category in background categories');
+            category = {
+                name: categoryName,
+                count: this.backgroundCategories[categoryName].length,
+                tabs: this.backgroundCategories[categoryName],
+                keywords: []
+            };
+        } else {
+            // Fallback to local categories
+            console.log('🏷️ TabOracle: Category not found in background, trying local categories');
+            category = this.getCategories().find(c => c.name === categoryName);
+        }
+        
+        if (!category) {
+            console.error('❌ TabOracle: Category not found:', categoryName);
+            return;
+        }
+        
+        console.log('🏷️ TabOracle: Category found:', category.name, 'with', category.tabs.length, 'tabs');
 
-        const confidence = Math.round(category.confidence);
+        // Handle empty categories
+        if (category.tabs.length === 0) {
+            this.categoryResults.innerHTML = `
+                <div class="category-header">
+                    <h3>${category.name} (0 tabs)</h3>
+                    <div class="category-stats">
+                        <span class="stat-item">📭 No tabs in this category</span>
+                    </div>
+                    <button class="back-button" id="backToCategoriesBtn">← Back to Categories</button>
+                </div>
+                
+                <div class="empty-state" style="text-align: center; padding: 40px; color: #6b7280;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+                    <h4>No tabs in ${category.name}</h4>
+                    <p>This category doesn't have any tabs yet. Try opening some relevant websites or check other categories.</p>
+                </div>
+            `;
+            
+            // Hide categories grid and show results
+            this.categoriesGrid.style.display = 'none';
+            this.categoryResults.style.display = 'block';
+            return;
+        }
+
         const uniqueKeywords = [...new Set(category.keywords)].slice(0, 10); // Top 10 unique keywords
 
         this.categoryResults.innerHTML = `
             <div class="category-header">
                 <h3>${category.name} (${category.count} tabs)</h3>
                 <div class="category-stats">
-                    <span class="stat-item">🎯 Confidence: ${confidence}%</span>
                     <span class="stat-item">🔑 Keywords: ${uniqueKeywords.length}</span>
                     <span class="stat-item">📊 Smart Categorized</span>
                 </div>
@@ -1798,6 +1932,9 @@ class TabOraclePopup {
         const testGetTabsBtn = document.getElementById('testGetTabs');
         const testGetCategoriesBtn = document.getElementById('testGetCategories');
         const testForceRefreshBtn = document.getElementById('testForceRefresh');
+        const testExplainMeBtn = document.getElementById('testExplainMe');
+        const testBasicSearchBtn = document.getElementById('testBasicSearch');
+        const testCategoryClickBtn = document.getElementById('testCategoryClick');
         const clearDebugResultsBtn = document.getElementById('clearDebugResults');
         
         if (testPingBtn) {
@@ -1814,6 +1951,18 @@ class TabOraclePopup {
         
         if (testForceRefreshBtn) {
             testForceRefreshBtn.addEventListener('click', () => this.testForceRefresh());
+        }
+        
+        if (testExplainMeBtn) {
+            testExplainMeBtn.addEventListener('click', () => this.testExplainMe());
+        }
+        
+        if (testBasicSearchBtn) {
+            testBasicSearchBtn.addEventListener('click', () => this.testBasicSearch());
+        }
+        
+        if (testCategoryClickBtn) {
+            testCategoryClickBtn.addEventListener('click', () => this.testCategoryClick());
         }
         
         if (clearDebugResultsBtn) {
@@ -2004,6 +2153,143 @@ class TabOraclePopup {
         }
     }
 
+    // Test Explain Me functionality
+    testExplainMe() {
+        try {
+            this.logDebug('🧠 Testing Explain Me functionality...');
+            
+            // Test with sample text
+            const testText = "This is a sample text to test the Explain Me feature. It should display properly in the overlay.";
+            
+            // Send test message to content script
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    chrome.tabs.sendMessage(tabs[0].id, {
+                        action: 'debug',
+                        testText: testText
+                    }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            this.logDebug(`❌ Explain Me test failed: ${chrome.runtime.lastError.message}`, 'error');
+                        } else if (response && response.success) {
+                            this.logDebug(`✅ Explain Me test successful: ${response.message}`, 'success');
+                        } else {
+                            this.logDebug(`⚠️ Explain Me test response: ${JSON.stringify(response)}`, 'warning');
+                        }
+                    });
+                } else {
+                    this.logDebug('❌ No active tab found for Explain Me test', 'error');
+                }
+            });
+            
+        } catch (error) {
+            this.logDebug(`❌ Explain Me test error: ${error.message}`, 'error');
+        }
+    }
+
+    // Test basic search functionality
+    testBasicSearch() {
+        try {
+            this.logDebug('🔍 Testing basic search functionality...');
+            
+            // Test 1: Check if search input exists
+            if (this.searchInput) {
+                this.logDebug('✅ Search input found', 'success');
+                this.logDebug(`Search input value: "${this.searchInput.value}"`, 'info');
+            } else {
+                this.logDebug('❌ Search input not found', 'error');
+            }
+            
+            // Test 2: Check if tabs list exists
+            if (this.tabsList) {
+                this.logDebug('✅ Tabs list found', 'success');
+                this.logDebug(`Tabs list display: ${this.tabsList.style.display}`, 'info');
+            } else {
+                this.logDebug('❌ Tabs list not found', 'error');
+            }
+            
+            // Test 3: Check if search results exists
+            if (this.searchResults) {
+                this.logDebug('✅ Search results container found', 'success');
+                this.logDebug(`Search results display: ${this.searchResults.style.display}`, 'info');
+            } else {
+                this.logDebug('❌ Search results container not found', 'error');
+            }
+            
+            // Test 4: Check if allTabs is loaded
+            if (this.allTabs && this.allTabs.length > 0) {
+                this.logDebug(`✅ Tabs loaded: ${this.allTabs.length} tabs`, 'success');
+                this.logDebug(`Sample tab: ${this.allTabs[0].title}`, 'info');
+            } else {
+                this.logDebug('❌ No tabs loaded', 'error');
+            }
+            
+            // Test 5: Try to perform a simple search
+            this.logDebug('🔍 Attempting to perform a simple search...', 'info');
+            this.handleNormalSearch('test');
+            
+        } catch (error) {
+            this.logDebug(`❌ Basic search test error: ${error.message}`, 'error');
+        }
+    }
+
+    // Test category click functionality
+    testCategoryClick() {
+        try {
+            this.logDebug('🏷️ Testing category click functionality...');
+            
+            // Test 1: Check if categories grid exists
+            if (this.categoriesGrid) {
+                this.logDebug('✅ Categories grid found', 'success');
+                this.logDebug(`Categories grid display: ${this.categoriesGrid.style.display}`, 'info');
+            } else {
+                this.logDebug('❌ Categories grid not found', 'error');
+                return;
+            }
+            
+            // Test 2: Check if category cards exist
+            const categoryCards = this.categoriesGrid.querySelectorAll('.category-card');
+            if (categoryCards.length > 0) {
+                this.logDebug(`✅ Found ${categoryCards.length} category cards`, 'success');
+                
+                // Test 3: Check first category card structure
+                const firstCard = categoryCards[0];
+                const categoryName = firstCard.getAttribute('data-category');
+                this.logDebug(`First card category: ${categoryName}`, 'info');
+                this.logDebug(`First card HTML: ${firstCard.outerHTML.substring(0, 200)}...`, 'info');
+                
+                // Test 4: Check if click listeners are attached
+                const hasClickListeners = firstCard._categoryClickHandler !== undefined;
+                this.logDebug(`Click listeners attached: ${hasClickListeners}`, hasClickListeners ? 'success' : 'warning');
+                
+                // Test 5: Try to simulate a click
+                this.logDebug('🔍 Simulating category click...', 'info');
+                if (hasClickListeners) {
+                    firstCard._categoryClickHandler();
+                    this.logDebug('✅ Category click simulated successfully', 'success');
+                } else {
+                    this.logDebug('⚠️ No click handler found, trying to add one', 'warning');
+                    this.addCategoryClickListeners();
+                    
+                    // Try again after adding listeners
+                    setTimeout(() => {
+                        const updatedCard = this.categoriesGrid.querySelector('.category-card');
+                        if (updatedCard && updatedCard._categoryClickHandler) {
+                            this.logDebug('✅ Click handler added, simulating click...', 'success');
+                            updatedCard._categoryClickHandler();
+                        } else {
+                            this.logDebug('❌ Still no click handler after adding', 'error');
+                        }
+                    }, 100);
+                }
+            } else {
+                this.logDebug('❌ No category cards found', 'error');
+                this.logDebug('Categories grid HTML:', this.categoriesGrid.innerHTML.substring(0, 200) + '...', 'info');
+            }
+            
+        } catch (error) {
+            this.logDebug(`❌ Category click test error: ${error.message}`, 'error');
+        }
+    }
 }
 
 // Initialize the popup when DOM is loaded

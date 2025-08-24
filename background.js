@@ -712,15 +712,16 @@ async function testContentScript(tabId) {
 function categorizeTabs(tabs) {
     try {
         const categories = {
-            'General': [],
-            'Social Media': [],
-            'News & Media': [],
-            'Shopping': [],
-            'Work & Productivity': [],
-            'Entertainment': [],
-            'Technology': [],
-            'Education': [],
-            'Other': []
+            '💻 Development': [],
+            '👥 Social': [],
+            '📰 News': [],
+            '🛒 Shopping': [],
+            '⚡ Productivity': [],
+            '🎥 Media': [],
+            '🔧 Programming': [],
+            '📚 Documentation': [],
+            '🔍 Search': [],
+            '🏷️ Other': []
         };
         
         tabs.forEach(tab => {
@@ -729,36 +730,40 @@ function categorizeTabs(tabs) {
             
             if (url.includes('facebook.com') || url.includes('twitter.com') || url.includes('instagram.com') || 
                 url.includes('linkedin.com') || url.includes('youtube.com') || url.includes('tiktok.com')) {
-                categories['Social Media'].push(tab);
+                categories['👥 Social'].push(tab);
             } else if (url.includes('news') || url.includes('bbc') || url.includes('cnn') || 
                        url.includes('reuters') || url.includes('nytimes') || url.includes('washingtonpost')) {
-                categories['News & Media'].push(tab);
+                categories['📰 News'].push(tab);
             } else if (url.includes('amazon') || url.includes('ebay') || url.includes('etsy') || 
                        url.includes('shop') || url.includes('store') || url.includes('buy')) {
-                categories['Shopping'].push(tab);
+                categories['🛒 Shopping'].push(tab);
             } else if (url.includes('gmail') || url.includes('outlook') || url.includes('office') || 
                        url.includes('google.com/docs') || url.includes('notion') || url.includes('trello')) {
-                categories['Work & Productivity'].push(tab);
+                categories['⚡ Productivity'].push(tab);
             } else if (url.includes('netflix') || url.includes('spotify') || url.includes('twitch') || 
                        url.includes('game') || url.includes('movie') || url.includes('music')) {
-                categories['Entertainment'].push(tab);
+                categories['🎥 Media'].push(tab);
             } else if (url.includes('github') || url.includes('stackoverflow') || url.includes('dev') || 
                        url.includes('tech') || url.includes('programming') || url.includes('code')) {
-                categories['Technology'].push(tab);
+                categories['💻 Development'].push(tab);
             } else if (url.includes('edu') || url.includes('course') || url.includes('learn') || 
                        url.includes('tutorial') || url.includes('documentation') || url.includes('wiki')) {
-                categories['Education'].push(tab);
+                categories['📚 Documentation'].push(tab);
             } else if (url.includes('google.com') || url.includes('bing.com') || url.includes('yahoo.com')) {
-                categories['General'].push(tab);
+                categories['🔍 Search'].push(tab);
             } else {
-                categories['Other'].push(tab);
+                categories['🏷️ Other'].push(tab);
             }
         });
         
-        // Remove empty categories
+        // Keep all categories but mark empty ones
         Object.keys(categories).forEach(key => {
             if (categories[key].length === 0) {
-                delete categories[key];
+                // Keep empty categories but mark them as empty
+                categories[key] = [];
+                console.log(`🏷️ TabOracle: Category "${key}" has 0 tabs but will be kept for UI`);
+            } else {
+                console.log(`🏷️ TabOracle: Category "${key}" has ${categories[key].length} tabs`);
             }
         });
         
@@ -766,7 +771,7 @@ function categorizeTabs(tabs) {
         
     } catch (error) {
         console.error('❌ TabOracle: Error categorizing tabs:', error);
-        return { 'Error': [] };
+        return { '🏷️ Other': [] };
     }
 }
 

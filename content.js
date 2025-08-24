@@ -307,17 +307,15 @@
         header.appendChild(closeButton);
         
         // Create selected text display
+        // Create selected text container with main popup styling
         const selectedTextContainer = document.createElement('div');
         selectedTextContainer.style.cssText = `
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(139, 92, 246, 0.25);
-            border-radius: 16px;
+            background: rgba(139, 92, 246, 0.05);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 12px;
             padding: 20px;
             margin-bottom: 24px;
-            max-height: 120px;
-            overflow-y: auto;
-            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.08);
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.1);
         `;
         
         const selectedTextLabel = document.createElement('div');
@@ -325,7 +323,7 @@
         selectedTextLabel.style.cssText = `
             font-weight: 600;
             color: #6d28d9;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
             font-size: 14px;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         `;
@@ -333,11 +331,19 @@
         const selectedText = document.createElement('div');
         selectedText.id = 'explain-selected-text';
         selectedText.style.cssText = `
-            color: #4b5563;
+            color: #374151;
             line-height: 1.6;
             font-size: 14px;
             font-style: italic;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(139, 92, 246, 0.15);
+            max-height: 200px;
+            overflow-y: auto;
+            word-wrap: break-word;
+            white-space: pre-wrap;
         `;
         
         selectedTextContainer.appendChild(selectedTextLabel);
@@ -409,6 +415,29 @@
         explainMeOverlay.appendChild(contentContainer);
         document.body.appendChild(explainMeOverlay);
         
+        // Debug: Check if elements were created properly
+        console.log('🔍 TabOracle: Overlay created, checking elements...');
+        console.log('🔍 TabOracle: selectedTextContainer:', selectedTextContainer);
+        console.log('🔍 TabOracle: explain-selected-text element:', document.getElementById('explain-selected-text'));
+        console.log('🔍 TabOracle: explain-selected-text parent:', document.getElementById('explain-selected-text')?.parentElement);
+        console.log('🔍 TabOracle: explain-selected-text visibility:', document.getElementById('explain-selected-text')?.style.display);
+        
+        // Test: Try to set some text immediately to verify the element works
+        const testElement = document.getElementById('explain-selected-text');
+        if (testElement) {
+            testElement.textContent = 'TEST: Element is working!';
+            console.log('✅ TabOracle: Test text set successfully');
+            console.log('✅ TabOracle: Test element content:', testElement.textContent);
+            
+            // Clear the test text after a moment
+            setTimeout(() => {
+                testElement.textContent = '';
+                console.log('✅ TabOracle: Test text cleared');
+            }, 1000);
+        } else {
+            console.error('❌ TabOracle: Test element not found after creation');
+        }
+        
         // Add event listeners
         explainMeOverlay.addEventListener('click', (e) => {
             if (e.target === explainMeOverlay) {
@@ -431,25 +460,26 @@
 
     function showExplainMe(selectedText) {
         try {
-            console.log('🔍 TabOracle: Showing Explain Me overlay for text:', selectedText.substring(0, 100) + '...');
+            console.log('🔍 TabOracle: Showing Explain Me overlay for text:', selectedText ? selectedText.substring(0, 100) + '...' : 'NO TEXT');
             
             if (!explainMeOverlay) {
                 console.log('🔍 TabOracle: Creating Explain Me overlay...');
                 createExplainMeOverlay();
             }
             
-            // Display selected text
-            const textElement = document.getElementById('explain-selected-text');
-            if (textElement) {
-                textElement.textContent = selectedText;
-            } else {
-                console.warn('⚠️ TabOracle: explain-selected-text element not found');
-            }
+            // Display selected text immediately after overlay creation
+            displaySelectedText(selectedText);
             
             // Show overlay
             if (explainMeOverlay) {
                 explainMeOverlay.style.display = 'flex';
                 console.log('✅ TabOracle: Explain Me overlay displayed');
+                
+                // Try to display text again after overlay is shown
+                setTimeout(() => {
+                    console.log('🔄 TabOracle: Retrying text display after overlay shown...');
+                    displaySelectedText(selectedText);
+                }, 100);
                 
                 // Start AI explanation
                 generateExplanation(selectedText);
@@ -458,6 +488,95 @@
             }
         } catch (error) {
             console.error('❌ TabOracle: Error in showExplainMe:', error);
+        }
+    }
+
+    function displaySelectedText(selectedText) {
+        console.log('🔍 TabOracle: Displaying selected text:', selectedText ? selectedText.substring(0, 50) + '...' : 'NO TEXT');
+        
+        // Try multiple approaches to find and set the text
+        let textElement = document.getElementById('explain-selected-text');
+        
+        if (textElement) {
+            console.log('✅ TabOracle: Found explain-selected-text element, setting text');
+            
+            if (selectedText && selectedText.trim() !== '') {
+                textElement.textContent = selectedText;
+                textElement.style.display = 'block';
+                textElement.style.visibility = 'visible';
+                textElement.style.border = '1px solid rgba(139, 92, 246, 0.15)';
+                textElement.style.background = 'rgba(255, 255, 255, 0.8)';
+                
+                // Force a reflow to ensure visibility
+                textElement.offsetHeight;
+                
+                console.log('✅ TabOracle: Text set successfully, element content:', textElement.textContent);
+                console.log('✅ TabOracle: Element display style:', textElement.style.display);
+                console.log('✅ TabOracle: Element visibility style:', textElement.style.visibility);
+            } else {
+                // Show "no text selected" message
+                textElement.textContent = 'No text selected. Please select some text on the page and try again.';
+                textElement.style.display = 'block';
+                textElement.style.visibility = 'visible';
+                textElement.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                textElement.style.background = 'rgba(239, 68, 68, 0.05)';
+                textElement.style.color = '#dc2626';
+                textElement.style.fontStyle = 'normal';
+                
+                console.log('⚠️ TabOracle: No text selected, showing warning message');
+            }
+        } else {
+            console.warn('⚠️ TabOracle: explain-selected-text element not found, trying alternative approach');
+            
+            // Try to find the element by class or other means
+            const selectedTextContainer = document.querySelector('[id*="explain-selected-text"]');
+            if (selectedTextContainer) {
+                console.log('✅ TabOracle: Found alternative selected text container');
+                if (selectedText && selectedText.trim() !== '') {
+                    selectedTextContainer.textContent = selectedText;
+                } else {
+                    selectedTextContainer.textContent = 'No text selected. Please select some text on the page and try again.';
+                }
+            } else {
+                console.error('❌ TabOracle: Could not find any selected text container');
+                
+                // Create a temporary display as fallback
+                const fallbackDisplay = document.createElement('div');
+                fallbackDisplay.style.cssText = `
+                    background: ${selectedText && selectedText.trim() !== '' ? 'rgba(139, 92, 246, 0.1)' : 'rgba(239, 68, 68, 0.05)'};
+                    border: 1px solid ${selectedText && selectedText.trim() !== '' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(239, 68, 68, 0.3)'};
+                    border-radius: 8px;
+                    padding: 16px;
+                    margin: 16px 0;
+                    color: ${selectedText && selectedText.trim() !== '' ? '#4b5563' : '#dc2626'};
+                    font-style: ${selectedText && selectedText.trim() !== '' ? 'italic' : 'normal'};
+                    font-size: 14px;
+                    line-height: 1.6;
+                `;
+                fallbackDisplay.textContent = selectedText && selectedText.trim() !== '' 
+                    ? `Selected Text: ${selectedText}` 
+                    : 'No text selected. Please select some text on the page and try again.';
+                
+                // Try to add it to the content area
+                const contentArea = document.getElementById('explain-content');
+                if (contentArea) {
+                    contentArea.insertBefore(fallbackDisplay, contentArea.firstChild);
+                }
+            }
+        }
+        
+        // Retry mechanism - if text element still not found, try again after a short delay
+        if (!textElement && !document.getElementById('explain-selected-text')) {
+            console.log('🔄 TabOracle: Text element not found, retrying after delay...');
+            setTimeout(() => {
+                const retryElement = document.getElementById('explain-selected-text');
+                if (retryElement && selectedText && selectedText.trim() !== '') {
+                    console.log('✅ TabOracle: Retry successful, setting text');
+                    retryElement.textContent = selectedText;
+                    retryElement.style.display = 'block';
+                    retryElement.style.visibility = 'visible';
+                }
+            }, 200);
         }
     }
 
@@ -491,7 +610,19 @@ Please provide an explanation that includes:
 Text to explain:
 "${selectedText}"
 
-Please format your response in a clear, structured way that's easy to read. Use bullet points, headings, and clear language.`;
+IMPORTANT: Please respond with clean, formatted text only. Do not include:
+- Code blocks or markdown formatting
+- Role prefixes like "AI:", "Assistant:", etc.
+- Special characters or formatting artifacts
+- HTML tags or technical markup
+
+Use simple formatting like:
+- Bold text with **asterisks**
+- Italic text with *asterisks*
+- Bullet points with •
+- Clear headings with ##
+
+Keep the response clean and readable.`;
 
             // Try multiple AI approaches (same as popup.js)
             let explanation = null;
@@ -503,7 +634,10 @@ Please format your response in a clear, structured way that's easy to read. Use 
                     console.log('🔍 TabOracle: Trying Chrome Language Model API...');
                     const languageModel = await chrome.languageModel.create();
                     const response = await languageModel.prompt(prompt);
-                    explanation = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    let rawResponse = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    
+                    // Clean the response
+                    explanation = cleanAIResponse(rawResponse);
                     aiSource = 'Chrome Language Model API';
                     console.log('✅ TabOracle: Successfully used Chrome Language Model API');
                 } catch (error) {
@@ -517,7 +651,10 @@ Please format your response in a clear, structured way that's easy to read. Use 
                     console.log('🔍 TabOracle: Trying Global LanguageModel...');
                     const languageModel = await LanguageModel.create();
                     const response = await languageModel.prompt(prompt);
-                    explanation = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    let rawResponse = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    
+                    // Clean the response
+                    explanation = cleanAIResponse(rawResponse);
                     aiSource = 'Global LanguageModel';
                     console.log('✅ TabOracle: Successfully used Global LanguageModel');
                 } catch (error) {
@@ -531,7 +668,10 @@ Please format your response in a clear, structured way that's easy to read. Use 
                     console.log('🔍 TabOracle: Trying Window LanguageModel...');
                     const languageModel = await window.LanguageModel.create();
                     const response = await languageModel.prompt(prompt);
-                    explanation = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    let rawResponse = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    
+                    // Clean the response
+                    explanation = cleanAIResponse(rawResponse);
                     aiSource = 'Window LanguageModel';
                     console.log('✅ TabOracle: Successfully used Window LanguageModel');
                 } catch (error) {
@@ -545,7 +685,10 @@ Please format your response in a clear, structured way that's easy to read. Use 
                     console.log('🔍 TabOracle: Trying GlobalThis LanguageModel...');
                     const languageModel = await globalThis.LanguageModel.create();
                     const response = await languageModel.prompt(prompt);
-                    explanation = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    let rawResponse = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    
+                    // Clean the response
+                    explanation = cleanAIResponse(rawResponse);
                     aiSource = 'GlobalThis LanguageModel';
                     console.log('✅ TabOracle: Successfully used GlobalThis LanguageModel');
                 } catch (error) {
@@ -572,7 +715,7 @@ Please format your response in a clear, structured way that's easy to read. Use 
                     });
                     
                     if (response && response.success && response.explanation) {
-                        explanation = response.explanation;
+                        explanation = cleanAIResponse(response.explanation);
                         aiSource = 'Popup AI (Runtime Messaging)';
                         console.log('✅ TabOracle: Successfully used popup AI through runtime messaging');
                     }
@@ -796,27 +939,92 @@ Please format your response in a clear, structured way that's easy to read. Use 
     }
 
     function formatExplanation(text) {
-        // Basic formatting for the explanation text
-        return text
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/## (.*?)\n/g, '<h3 style="color: #333; margin: 20px 0 10px 0; font-size: 18px;">$1</h3>')
-            .replace(/\n\n/g, '</p><p style="margin: 10px 0;">')
-            .replace(/\n• /g, '</p><p style="margin: 5px 0;">• ')
-            .replace(/\n(\d+\.)/g, '</p><p style="margin: 5px 0;">$1 ')
-            .replace(/^/, '<p style="margin: 10px 0;">')
-            .replace(/$/, '</p>');
+        if (!text || typeof text !== 'string') {
+            return '<p style="color: #ef4444; font-style: italic;">No explanation available.</p>';
+        }
+
+        // Clean the text first - remove any garbage characters and normalize
+        let cleanedText = text
+            // Remove common AI response artifacts
+            .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+            .replace(/`([^`]+)`/g, '<code style="background: rgba(139, 92, 246, 0.1); padding: 2px 6px; border-radius: 4px; color: #6d28d9; font-family: monospace;">$1</code>') // Convert inline code
+            .replace(/^\s*AI:\s*/gi, '') // Remove AI prefixes
+            .replace(/^\s*Assistant:\s*/gi, '') // Remove Assistant prefixes
+            .replace(/^\s*User:\s*/gi, '') // Remove User prefixes
+            .replace(/^\s*Human:\s*/gi, '') // Remove Human prefixes
+            .replace(/^\s*Bot:\s*/gi, '') // Remove Bot prefixes
+            .replace(/^\s*System:\s*/gi, '') // Remove System prefixes
+            .replace(/^\s*[A-Za-z]+:\s*/gi, '') // Remove any other role prefixes
+            .replace(/\n\s*[A-Za-z]+:\s*/gi, '\n') // Remove role prefixes in middle of text
+            .replace(/^\s*[-*]\s*/gm, '• ') // Convert markdown list markers to bullet points
+            .replace(/^\s*\d+\.\s*/gm, '') // Remove numbered list markers
+            .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1f2937; font-weight: 600;">$1</strong>') // Bold text
+            .replace(/\*(.*?)\*/g, '<em style="color: #4b5563; font-style: italic;">$1</em>') // Italic text
+            .replace(/^##\s*(.*?)$/gm, '<h3 style="color: #1f2937; margin: 25px 0 15px 0; font-size: 20px; font-weight: 600; border-bottom: 2px solid rgba(139, 92, 246, 0.2); padding-bottom: 8px;">$1</h3>') // H3 headings
+            .replace(/^#\s*(.*?)$/gm, '<h2 style="color: #1f2937; margin: 30px 0 20px 0; font-size: 24px; font-weight: 700;">$1</h2>') // H2 headings
+            .replace(/\n\s*\n/g, '</p><p style="margin: 15px 0; line-height: 1.6; color: #374151;">') // Paragraph breaks
+            .replace(/\n•\s*/g, '</p><p style="margin: 8px 0; line-height: 1.6; color: #374151;">• ') // Bullet points
+            .replace(/\n(\d+\.)\s*/g, '</p><p style="margin: 8px 0; line-height: 1.6; color: #374151;">$1 ') // Numbered points
+            .replace(/^\s*•\s*/gm, '• ') // Ensure bullet points start properly
+            .replace(/^\s*(\d+\.)\s*/gm, '$1 ') // Ensure numbered points start properly
+            .trim(); // Remove leading/trailing whitespace
+
+        // Wrap in paragraph tags
+        cleanedText = '<p style="margin: 15px 0; line-height: 1.6; color: #374151;">' + cleanedText + '</p>';
+
+        // Clean up any empty paragraphs
+        cleanedText = cleanedText
+            .replace(/<p[^>]*>\s*<\/p>/g, '') // Remove empty paragraphs
+            .replace(/<p[^>]*>\s*•\s*<\/p>/g, '') // Remove empty bullet points
+            .replace(/<p[^>]*>\s*\d+\.\s*<\/p>/g, ''); // Remove empty numbered points
+
+        // Add container styling
+        return `
+            <div style="
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(20px);
+                border: 1px solid rgba(139, 92, 246, 0.15);
+                border-radius: 16px;
+                padding: 25px;
+                box-shadow: 0 4px 12px rgba(139, 92, 246, 0.08);
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            ">
+                ${cleanedText}
+            </div>
+        `;
     }
 
     // Message listener for Explain Me feature
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('🔍 TabOracle: Message received:', message);
+        console.log('🔍 TabOracle: Sender:', sender);
+        console.log('🔍 TabOracle: Message type:', typeof message);
+        console.log('🔍 TabOracle: Message keys:', Object.keys(message));
         
         if (message.action === 'showExplainMe') {
             try {
                 console.log('🔍 TabOracle: Processing Explain Me request...');
-                showExplainMe(message.selectedText);
-                sendResponse({ success: true });
+                console.log('🔍 TabOracle: Message selectedText:', message.selectedText);
+                console.log('🔍 TabOracle: Message selectedText type:', typeof message.selectedText);
+                console.log('🔍 TabOracle: Message selectedText length:', message.selectedText ? message.selectedText.length : 'undefined');
+                console.log('🔍 TabOracle: Message selectedText trimmed:', message.selectedText ? message.selectedText.trim() : 'undefined');
+                
+                // Validate selected text
+                let selectedText = message.selectedText;
+                if (!selectedText || selectedText.trim() === '') {
+                    console.warn('⚠️ TabOracle: No selected text in message, trying to get from page selection');
+                    selectedText = window.getSelection().toString().trim();
+                    console.log('🔍 TabOracle: Got selected text from page:', selectedText ? selectedText.substring(0, 100) + '...' : 'NO TEXT');
+                }
+                
+                if (selectedText && selectedText.trim() !== '') {
+                    console.log('✅ TabOracle: Valid text found, calling showExplainMe');
+                    showExplainMe(selectedText);
+                    sendResponse({ success: true, textLength: selectedText.length });
+                } else {
+                    console.error('❌ TabOracle: No text selected on page');
+                    sendResponse({ success: false, error: 'No text selected on page' });
+                }
             } catch (error) {
                 console.error('❌ TabOracle: Error processing Explain Me request:', error);
                 sendResponse({ success: false, error: error.message });
@@ -825,6 +1033,16 @@ Please format your response in a clear, structured way that's easy to read. Use 
             // Simple test message to verify content script is working
             console.log('✅ TabOracle: Content script test message received');
             sendResponse({ success: true, message: 'Content script is working!' });
+        } else if (message.action === 'debug') {
+            // Debug message to test text display
+            console.log('🔍 TabOracle: Debug message received:', message);
+            if (message.testText) {
+                console.log('🔍 TabOracle: Testing with text:', message.testText);
+                showExplainMe(message.testText);
+                sendResponse({ success: true, message: 'Debug text displayed' });
+            } else {
+                sendResponse({ success: false, error: 'No test text provided' });
+            }
         }
         
         // Return true to indicate async response
@@ -1241,6 +1459,40 @@ Please format your response in a clear, structured way that's easy to read. Use 
     
     function escapeRegex(string) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function cleanAIResponse(text) {
+        if (!text || typeof text !== 'string') {
+            return 'No explanation available.';
+        }
+
+        // Remove common AI response artifacts and clean the text
+        let cleanedText = text
+            .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+            .replace(/`([^`]+)`/g, '$1') // Remove inline code markers
+            .replace(/^\s*AI:\s*/gi, '') // Remove AI prefixes
+            .replace(/^\s*Assistant:\s*/gi, '') // Remove Assistant prefixes
+            .replace(/^\s*User:\s*/gi, '') // Remove User prefixes
+            .replace(/^\s*Human:\s*/gi, '') // Remove Human prefixes
+            .replace(/^\s*Bot:\s*/gi, '') // Remove Bot prefixes
+            .replace(/^\s*System:\s*/gi, '') // Remove System prefixes
+            .replace(/^\s*[A-Za-z]+:\s*/gi, '') // Remove any other role prefixes
+            .replace(/\n\s*[A-Za-z]+:\s*/gi, '\n') // Remove role prefixes in middle of text
+            .replace(/^\s*[-*]\s*/gm, '• ') // Convert markdown list markers to bullet points
+            .replace(/^\s*\d+\.\s*/gm, '') // Remove numbered list markers
+            .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markers
+            .replace(/\*(.*?)\*/g, '$1') // Remove italic markers
+            .replace(/^##\s*(.*?)$/gm, '$1') // Remove H3 markers
+            .replace(/^#\s*(.*?)$/gm, '$1') // Remove H2 markers
+            .replace(/\n\s*\n/g, '\n\n') // Normalize paragraph breaks
+            .replace(/\n•\s*/g, '\n• ') // Ensure bullet points are properly formatted
+            .replace(/\n(\d+\.)\s*/g, '\n$1 ') // Ensure numbered points are properly formatted
+            .replace(/^\s*•\s*/gm, '• ') // Ensure bullet points start properly
+            .replace(/^\s*(\d+\.)\s*/gm, '$1 ') // Ensure numbered points start properly
+            .replace(/[^\w\s•\-\.,!?;:()]/g, '') // Remove any other special characters
+            .trim(); // Remove leading/trailing whitespace
+
+        return cleanedText;
     }
     
     // Listen for messages from background script
