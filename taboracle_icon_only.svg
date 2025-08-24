@@ -2,10 +2,10 @@
   <defs>
     <!-- Gradient for the crystal ball -->
     <radialGradient id="crystalGradient" cx="0.3" cy="0.3" r="0.8">
-      <stop offset="0%" stop-color="#f3e8ff" stop-opacity="0.3"/>
-      <stop offset="30%" stop-color="#e9d5ff" stop-opacity="0.5"/>
-      <stop offset="70%" stop-color="#8b5cf6" stop-opacity="0.8"/>
-      <stop offset="100%" stop-color="#6b21a8" stop-opacity="0.9"/>
+      <stop offset="0%" stop-color="#4b5563" stop-opacity="0.3"/>
+      <stop offset="30%" stop-color="#374151" stop-opacity="0.6"/>
+      <stop offset="70%" stop-color="#1f2937" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#111827" stop-opacity="1"/>
     </radialGradient>
     
     <!-- Gradient for the base -->
@@ -19,11 +19,11 @@
   <ellipse cx="40" cy="65" rx="20" ry="6" fill="url(#baseGradient)" opacity="0.7"/>
   
   <!-- Main crystal ball -->
-  <circle cx="40" cy="40" r="28" fill="url(#crystalGradient)" stroke="#8b5cf6" stroke-width="1" opacity="0.9"/>
+  <circle cx="40" cy="40" r="28" fill="url(#crystalGradient)" stroke="#d1d5db" stroke-width="1" opacity="0.9"/>
   
   <!-- Inner reflections -->
-  <circle cx="33" cy="32" r="8" fill="#c084fc" opacity="0.15"/>
-  <circle cx="30" cy="28" r="3" fill="#e9d5ff" opacity="0.25"/>
+  <circle cx="33" cy="32" r="8" fill="#ffffff" opacity="0.25"/>
+  <circle cx="30" cy="28" r="3" fill="#ffffff" opacity="0.4"/>
   
   <!-- Mystical sparkle -->
   <g opacity="0.8">
@@ -33,32 +33,32 @@
   <!-- Complex AI neural network and intelligence patterns -->
   <g opacity="0.6">
     <!-- Central AI brain core -->
-    <circle cx="40" cy="40" r="12" fill="none" stroke="#c084fc" stroke-width="0.5" opacity="0.4"/>
-    <circle cx="40" cy="40" r="8" fill="none" stroke="#e9d5ff" stroke-width="0.3" opacity="0.6"/>
+    <circle cx="40" cy="40" r="12" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.4"/>
+    <circle cx="40" cy="40" r="8" fill="none" stroke="#06d6a0" stroke-width="0.3" opacity="0.6"/>
     
-    <!-- AI Neural network nodes (unified color) -->
+    <!-- AI Neural network nodes (bright colors) -->
     <!-- Input layer -->
-    <circle cx="22" cy="30" r="2" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.5"/>
-    <circle cx="22" cy="40" r="2" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.5"/>
-    <circle cx="22" cy="50" r="2" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.5"/>
+    <circle cx="22" cy="30" r="2" fill="#ffffff" opacity="0.9" stroke="#06d6a0" stroke-width="0.5"/>
+    <circle cx="22" cy="40" r="2" fill="#ffffff" opacity="0.9" stroke="#06d6a0" stroke-width="0.5"/>
+    <circle cx="22" cy="50" r="2" fill="#ffffff" opacity="0.9" stroke="#06d6a0" stroke-width="0.5"/>
     
     <!-- Hidden layer 1 -->
-    <circle cx="32" cy="25" r="2" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.5"/>
-    <circle cx="32" cy="35" r="2" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.5"/>
-    <circle cx="32" cy="45" r="2" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.5"/>
-    <circle cx="32" cy="55" r="2" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.5"/>
+    <circle cx="32" cy="25" r="2" fill="#ffffff" opacity="0.9" stroke="#14b8a6" stroke-width="0.5"/>
+    <circle cx="32" cy="35" r="2" fill="#ffffff" opacity="0.9" stroke="#14b8a6" stroke-width="0.5"/>
+    <circle cx="32" cy="45" r="2" fill="#ffffff" opacity="0.9" stroke="#14b8a6" stroke-width="0.5"/>
+    <circle cx="32" cy="55" r="2" fill="#ffffff" opacity="0.9" stroke="#14b8a6" stroke-width="0.5"/>
     
     <!-- Central AI processor -->
-    <circle cx="40" cy="35" r="2.5" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.8"/>
-    <circle cx="40" cy="45" r="2.5" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.8"/>
+    <circle cx="40" cy="35" r="2.5" fill="#ffffff" opacity="0.9" stroke="#0891b2" stroke-width="0.8"/>
+    <circle cx="40" cy="45" r="2.5" fill="#ffffff" opacity="0.9" stroke="#0891b2" stroke-width="0.8"/>
     
     <!-- Output layer -->
-    <circle cx="48" cy="30" r="2" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.5"/>
-    <circle cx="48" cy="40" r="2" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.5"/>
-    <circle cx="48" cy="50" r="2" fill="#c084fc" opacity="0.9" stroke="#8b5cf6" stroke-width="0.5"/>
+    <circle cx="48" cy="30" r="2" fill="#ffffff" opacity="0.9" stroke="#0284c7" stroke-width="0.5"/>
+    <circle cx="48" cy="40" r="2" fill="#ffffff" opacity="0.9" stroke="#0284c7" stroke-width="0.5"/>
+    <circle cx="48" cy="50" r="2" fill="#ffffff" opacity="0.9" stroke="#0284c7" stroke-width="0.5"/>
     
     <!-- Enhanced neural connections -->
-    <g stroke="#e9d5ff" stroke-width="0.4" opacity="0.6" fill="none">
+    <g stroke="#ffffff" stroke-width="0.4" opacity="0.7" fill="none">
       <!-- Input to hidden connections -->
       <line x1="24" y1="30" x2="30" y2="25"/>
       <line x1="24" y1="30" x2="30" y2="35"/>
@@ -81,7 +81,7 @@
     </g>
     
     <!-- AI Circuit board patterns -->
-    <g stroke="#c084fc" stroke-width="0.3" opacity="0.5" fill="none">
+    <g stroke="#06d6a0" stroke-width="0.3" opacity="0.6" fill="none">
       <!-- Horizontal circuits -->
       <path d="M 25 28 L 30 28"/>
       <path d="M 25 42 L 30 42"/>
@@ -94,9 +94,9 @@
       <path d="M 40 47.5 L 40 50"/>
       
       <!-- Circuit junctions -->
-      <circle cx="30" cy="28" r="0.8" fill="none" stroke="#8b5cf6" stroke-width="0.3"/>
-      <circle cx="30" cy="42" r="0.8" fill="none" stroke="#8b5cf6" stroke-width="0.3"/>
-      <circle cx="46" cy="33" r="0.8" fill="none" stroke="#8b5cf6" stroke-width="0.3"/>
+      <circle cx="30" cy="28" r="0.8" fill="none" stroke="#14b8a6" stroke-width="0.3"/>
+      <circle cx="30" cy="42" r="0.8" fill="none" stroke="#14b8a6" stroke-width="0.3"/>
+      <circle cx="46" cy="33" r="0.8" fill="none" stroke="#14b8a6" stroke-width="0.3"/>
     </g>
     
     <!-- AI Data flow particles (more prominent) -->
@@ -116,8 +116,8 @@
     </g>
     
     <!-- Central AI indicator -->
-    <g opacity="0.7">
-      <circle cx="40" cy="40" r="1" fill="#e9d5ff">
+    <g opacity="0.8">
+      <circle cx="40" cy="40" r="1" fill="#ffffff">
         <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/>
       </circle>
     </g>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TabOracle - Tab Loading Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #fbbf24;
+        }
+        .test-section {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        button {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(139, 92, 246, 0.3);
+        }
+        .result {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 TabOracle - Tab Loading Debug Test</h1>
+        
+        <div class="test-section">
+            <h3>🧪 Test Background Script Communication</h3>
+            <button onclick="testPing()">Test Ping</button>
+            <button onclick="testGetTabs()">Test Get Tabs</button>
+            <button onclick="testGetCategories()">Test Get Categories</button>
+            <button onclick="testForceRefresh()">Test Force Refresh</button>
+            <button onclick="clearResults()">Clear Results</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>📊 Results</h3>
+            <div id="results" class="result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📋 Instructions</h3>
+            <ol>
+                <li>Make sure TabOracle extension is installed and enabled</li>
+                <li>Open this page in Chrome</li>
+                <li>Click the test buttons to debug tab loading</li>
+                <li>Check the browser console for detailed logs</li>
+                <li>Look for any error messages in the results</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            
+            results.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            results.scrollTop = results.scrollHeight;
+            
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function testPing() {
+            try {
+                log('🔍 Testing ping to background script...');
+                
+                const response = await new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({ action: 'ping' }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                
+                log(`✅ Ping successful: ${JSON.stringify(response, null, 2)}`, 'success');
+                
+            } catch (error) {
+                log(`❌ Ping failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testGetTabs() {
+            try {
+                log('🔍 Testing getTabs...');
+                
+                const response = await new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({ action: 'getTabs' }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                
+                if (response.tabs) {
+                    log(`✅ GetTabs successful: Found ${response.tabs.length} tabs`, 'success');
+                    if (response.tabs.length > 0) {
+                        log(`📋 Sample tabs:`, 'info');
+                        response.tabs.slice(0, 3).forEach((tab, index) => {
+                            log(`   ${index + 1}. ${tab.title} (${tab.url})`, 'info');
+                        });
+                    }
+                } else {
+                    log(`⚠️ GetTabs response missing tabs: ${JSON.stringify(response)}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ GetTabs failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testGetCategories() {
+            try {
+                log('🔍 Testing getCategories...');
+                
+                const response = await new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({ action: 'getCategories' }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                
+                if (response.categories) {
+                    const categoryCount = Object.keys(response.categories).length;
+                    log(`✅ GetCategories successful: Found ${categoryCount} categories`, 'success');
+                    
+                    Object.entries(response.categories).forEach(([category, tabs]) => {
+                        log(`   📁 ${category}: ${tabs.length} tabs`, 'info');
+                    });
+                } else {
+                    log(`⚠️ GetCategories response missing categories: ${JSON.stringify(response)}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ GetCategories failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testForceRefresh() {
+            try {
+                log('🔍 Testing force refresh...');
+                
+                const response = await new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({ action: 'forceRefreshTabs' }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                
+                if (response.success) {
+                    log(`✅ Force refresh successful: ${response.tabsCount} tabs`, 'success');
+                } else {
+                    log(`⚠️ Force refresh failed: ${response.error}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ Force refresh failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run tests when page loads
+        window.addEventListener('load', () => {
+            log('🚀 Page loaded, starting auto-tests...', 'info');
+            
+            setTimeout(() => {
+                log('🧪 Running auto-tests...', 'info');
+                testPing();
+                
+                setTimeout(() => {
+                    testGetTabs();
+                }, 1000);
+                
+                setTimeout(() => {
+                    testGetCategories();
+                }, 2000);
+                
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

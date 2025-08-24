@@ -7,7 +7,8 @@
     "tabs",
     "storage",
     "scripting",
-    "offscreen"
+    "offscreen",
+    "contextMenus"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -29,7 +30,8 @@
         "offscreen.html",
         "offscreen.js",
         "vendor/pdfjs/pdf.min.js",
-        "vendor/pdfjs/pdf.worker.min.js"
+        "vendor/pdfjs/pdf.worker.min.js",
+        "taboracle_combined.svg"
       ],
       "matches": ["<all_urls>"]
     }
@@ -48,7 +50,7 @@
     }
   },
   "icons": {
-    "16": "icon16.png",
+    "32": "icon32.png",
     "48": "icon48.png",
     "128": "icon128.png"
   }

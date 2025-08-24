@@ -1,6 +1,9 @@
 // Popup script for TabOracle with Tabbed Interface
 class TabOraclePopup {
     constructor() {
+        // Check if we're in extension context
+        this.checkExtensionContext();
+        
         // Initialize UI elements
         this.searchInput = document.getElementById('searchInput');
         this.tabsList = document.getElementById('tabsList');
@@ -52,6 +55,109 @@ class TabOraclePopup {
         // Fix popup height
         this.fixPopupHeight();
         window.addEventListener('resize', () => this.fixPopupHeight());
+    }
+
+    checkExtensionContext() {
+        console.log('🔍 TabOracle: Checking extension context...');
+        console.log('🔍 TabOracle: typeof chrome:', typeof chrome);
+        console.log('🔍 TabOracle: chrome object:', chrome);
+        
+        if (typeof chrome === 'undefined') {
+            console.error('❌ TabOracle: chrome object is undefined - not in extension context');
+            this.showExtensionContextError();
+            return;
+        }
+        
+        if (!chrome.runtime) {
+            console.error('❌ TabOracle: chrome.runtime is undefined');
+            this.showExtensionContextError();
+            return;
+        }
+        
+        if (!chrome.tabs) {
+            console.error('❌ TabOracle: chrome.tabs is undefined');
+            this.showExtensionContextError();
+            return;
+        }
+        
+        console.log('✅ TabOracle: Extension context is available');
+        console.log('✅ TabOracle: chrome.runtime available:', !!chrome.runtime);
+        console.log('✅ TabOracle: chrome.tabs available:', !!chrome.tabs);
+        console.log('✅ TabOracle: chrome.storage available:', !!chrome.storage);
+        
+        // Test background script connection
+        this.testBackgroundConnection();
+    }
+
+    showExtensionContextError() {
+        const debugResults = document.getElementById('debugResults');
+        if (debugResults) {
+            debugResults.innerHTML = `
+                <div style="color: #ef4444; padding: 20px; text-align: center;">
+                    <h3>❌ Extension Context Error</h3>
+                    <p>The extension context is not available. This usually means:</p>
+                    <ul style="text-align: left; margin: 20px 0;">
+                        <li>The extension is not properly installed</li>
+                        <li>The extension is disabled</li>
+                        <li>There's a manifest error</li>
+                        <li>The popup is not running in extension context</li>
+                    </ul>
+                    <p><strong>Try reloading the extension from chrome://extensions/</strong></p>
+                </div>
+            `;
+        }
+        
+        // Also show error in main content
+        const tabsList = document.getElementById('tabsList');
+        if (tabsList) {
+            tabsList.innerHTML = `
+                <div style="color: #ef4444; padding: 20px; text-align: center;">
+                    <h3>❌ Extension Context Error</h3>
+                    <p>Cannot access extension APIs. Please reload the extension.</p>
+                </div>
+            `;
+        }
+    }
+
+    async testBackgroundConnection() {
+        try {
+            console.log('🔍 TabOracle: Testing background script connection...');
+            
+            // Test if background script is responding
+            const response = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({ action: 'ping' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(response);
+                    }
+                });
+            });
+            
+            console.log('✅ TabOracle: Background script connection successful:', response);
+            
+        } catch (error) {
+            console.error('❌ TabOracle: Background script connection failed:', error);
+            this.showBackgroundConnectionError();
+        }
+    }
+
+    showBackgroundConnectionError() {
+        const debugResults = document.getElementById('debugResults');
+        if (debugResults) {
+            debugResults.innerHTML = `
+                <div style="color: #f59e0b; padding: 20px; text-align: center;">
+                    <h3>⚠️ Background Script Connection Error</h3>
+                    <p>The background script is not responding. This could mean:</p>
+                    <ul style="text-align: left; margin: 20px 0;">
+                        <li>The background script failed to load</li>
+                        <li>There's an error in background.js</li>
+                        <li>The service worker is not running</li>
+                    </ul>
+                    <p><strong>Check the browser console for background script errors</strong></p>
+                </div>
+            `;
+        }
     }
 
     setupTabRefresh() {
@@ -434,6 +540,9 @@ class TabOraclePopup {
         
         // Debug button (removed)
         
+        // Debug functionality
+        this.setupDebugEventListeners();
+        
         // Back to categories button (will be added dynamically)
         document.addEventListener('click', (e) => {
             if (e.target.id === 'backToCategoriesBtn') {
@@ -585,6 +694,8 @@ class TabOraclePopup {
             case 'categorySearchTab':
                 console.log('🔄 TabOracle: Loading category content');
                 this.loadCategories();
+                // Force refresh tabs in background script
+                this.forceRefreshTabs();
                 break;
             case 'smartSearchTab':
                 console.log('🔄 TabOracle: Loading smart search content');
@@ -602,7 +713,7 @@ class TabOraclePopup {
     async loadTabs() {
         try {
             console.log('🔍 TabOracle: Loading tabs...');
-            const response = await chrome.runtime.sendMessage({ action: 'getAllTabs' });
+            const response = await chrome.runtime.sendMessage({ action: 'getTabs' });
             console.log('🔍 TabOracle: Response received:', response);
             this.allTabs = (response && response.tabs) ? response.tabs : [];
             console.log('🔍 TabOracle: Tabs loaded:', this.allTabs.length);
@@ -616,8 +727,24 @@ class TabOraclePopup {
     async loadCategories() {
         try {
             console.log('🏷️ TabOracle: Loading categories...');
-            const response = await chrome.runtime.sendMessage({ action: 'getAllTabs' });
-            console.log('🏷️ TabOracle: Categories response:', response);
+            
+            // First try to get categories directly from background script
+            try {
+                const categoriesResponse = await chrome.runtime.sendMessage({ action: 'getCategories' });
+                console.log('🏷️ TabOracle: Categories response:', categoriesResponse);
+                
+                if (categoriesResponse.categories && Object.keys(categoriesResponse.categories).length > 0) {
+                    console.log('🏷️ TabOracle: Categories loaded successfully:', Object.keys(categoriesResponse.categories));
+                    this.renderCategoriesFromBackground(categoriesResponse.categories);
+                    return;
+                }
+            } catch (error) {
+                console.warn('⚠️ TabOracle: Failed to get categories directly, trying tabs approach:', error);
+            }
+            
+            // Fallback: Get tabs and categorize locally
+            const response = await chrome.runtime.sendMessage({ action: 'getTabs' });
+            console.log('🏷️ TabOracle: Tabs response:', response);
             
             this.allTabs = response.tabs || [];
             console.log('🏷️ TabOracle: Tabs loaded for categories:', this.allTabs.length);
@@ -627,7 +754,6 @@ class TabOraclePopup {
                 console.log('🏷️ TabOracle: Sample tab structure:', this.allTabs[0]);
                 console.log('🏷️ TabOracle: Sample tab has title:', this.allTabs[0].title);
                 console.log('🏷️ TabOracle: Sample tab has URL:', this.allTabs[0].url);
-                console.log('🏷️ TabOracle: Sample tab has context:', this.allTabs[0].context);
             }
             
             if (this.allTabs.length === 0) {
@@ -707,6 +833,49 @@ class TabOraclePopup {
     renderCategories() {
         const categories = this.getCategories();
         this.categoriesGrid.innerHTML = categories.map(category => this.createCategoryCard(category)).join('');
+    }
+
+    renderCategoriesFromBackground(categories) {
+        console.log('🏷️ TabOracle: Rendering categories from background script:', categories);
+        
+        if (!categories || Object.keys(categories).length === 0) {
+            this.categoriesGrid.innerHTML = '<div class="empty-state">No categories found</div>';
+            return;
+        }
+        
+        // Convert background script categories to UI format
+        const categoryCards = Object.entries(categories).map(([categoryName, tabs]) => {
+            return this.createCategoryCard({
+                name: categoryName,
+                count: tabs.length,
+                tabs: tabs,
+                confidence: 1.0,
+                keywords: []
+            });
+        }).join('');
+        
+        this.categoriesGrid.innerHTML = categoryCards;
+        console.log('🏷️ TabOracle: Categories rendered from background script');
+    }
+
+    async forceRefreshTabs() {
+        try {
+            console.log('🔄 TabOracle: Force refreshing tabs...');
+            const response = await chrome.runtime.sendMessage({ action: 'forceRefreshTabs' });
+            console.log('🔄 TabOracle: Force refresh response:', response);
+            
+            if (response.success) {
+                console.log('✅ TabOracle: Tabs refreshed successfully, count:', response.tabsCount);
+                // Reload categories after refresh
+                setTimeout(() => {
+                    this.loadCategories();
+                }, 500);
+            } else {
+                console.error('❌ TabOracle: Force refresh failed:', response.error);
+            }
+        } catch (error) {
+            console.error('❌ TabOracle: Error during force refresh:', error);
+        }
     }
 
     getCategories() {
@@ -1621,6 +1790,219 @@ class TabOraclePopup {
         }
     }
 
+    setupDebugEventListeners() {
+        console.log('🐛 TabOracle: Setting up debug event listeners...');
+        
+        // Debug buttons
+        const testPingBtn = document.getElementById('testPing');
+        const testGetTabsBtn = document.getElementById('testGetTabs');
+        const testGetCategoriesBtn = document.getElementById('testGetCategories');
+        const testForceRefreshBtn = document.getElementById('testForceRefresh');
+        const clearDebugResultsBtn = document.getElementById('clearDebugResults');
+        
+        if (testPingBtn) {
+            testPingBtn.addEventListener('click', () => this.testPing());
+        }
+        
+        if (testGetTabsBtn) {
+            testGetTabsBtn.addEventListener('click', () => this.testGetTabs());
+        }
+        
+        if (testGetCategoriesBtn) {
+            testGetCategoriesBtn.addEventListener('click', () => this.testGetCategories());
+        }
+        
+        if (testForceRefreshBtn) {
+            testForceRefreshBtn.addEventListener('click', () => this.testForceRefresh());
+        }
+        
+        if (clearDebugResultsBtn) {
+            clearDebugResultsBtn.addEventListener('click', () => this.clearDebugResults());
+        }
+        
+        // Add basic environment test
+        this.testBasicEnvironment();
+        
+        console.log('🐛 TabOracle: Debug event listeners setup complete');
+    }
+
+    testBasicEnvironment() {
+        console.log('🧪 TabOracle: Testing basic environment...');
+        
+        const debugResults = document.getElementById('debugResults');
+        if (!debugResults) return;
+        
+        this.logDebug('🧪 Testing basic environment...', 'info');
+        
+        // Test 1: Check if we're in extension context
+        if (typeof chrome === 'undefined') {
+            this.logDebug('❌ chrome object is undefined', 'error');
+        } else {
+            this.logDebug('✅ chrome object is available', 'success');
+        }
+        
+        // Test 2: Check chrome.runtime
+        if (typeof chrome !== 'undefined' && !chrome.runtime) {
+            this.logDebug('❌ chrome.runtime is undefined', 'error');
+        } else if (typeof chrome !== 'undefined' && chrome.runtime) {
+            this.logDebug('✅ chrome.runtime is available', 'success');
+        }
+        
+        // Test 3: Check chrome.tabs
+        if (typeof chrome !== 'undefined' && !chrome.tabs) {
+            this.logDebug('❌ chrome.tabs is undefined', 'error');
+        } else if (typeof chrome !== 'undefined' && chrome.tabs) {
+            this.logDebug('✅ chrome.tabs is available', 'success');
+        }
+        
+        // Test 4: Check if we can access extension APIs
+        try {
+            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+                this.logDebug(`✅ Extension ID: ${chrome.runtime.id}`, 'success');
+            } else {
+                this.logDebug('❌ Cannot get extension ID', 'error');
+            }
+        } catch (error) {
+            this.logDebug(`❌ Error getting extension ID: ${error.message}`, 'error');
+        }
+        
+        // Test 5: Check if we're in a popup context
+        if (window.location.protocol === 'chrome-extension:') {
+            this.logDebug('✅ Running in chrome-extension context', 'success');
+        } else {
+            this.logDebug(`⚠️ Running in ${window.location.protocol} context`, 'warning');
+        }
+        
+        this.logDebug('🧪 Basic environment test complete', 'info');
+    }
+
+    // Debug functionality methods
+    logDebug(message, type = 'info') {
+        const debugResults = document.getElementById('debugResults');
+        if (!debugResults) return;
+        
+        const timestamp = new Date().toLocaleTimeString();
+        const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+        
+        debugResults.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+        debugResults.scrollTop = debugResults.scrollHeight;
+        
+        console.log(`[${timestamp}] ${message}`);
+    }
+
+    clearDebugResults() {
+        const debugResults = document.getElementById('debugResults');
+        if (debugResults) {
+            debugResults.innerHTML = '';
+        }
+    }
+
+    async testPing() {
+        try {
+            this.logDebug('🔍 Testing ping to background script...');
+            
+            const response = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({ action: 'ping' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(response);
+                    }
+                });
+            });
+            
+            this.logDebug(`✅ Ping successful: ${JSON.stringify(response, null, 2)}`, 'success');
+            
+        } catch (error) {
+            this.logDebug(`❌ Ping failed: ${error.message}`, 'error');
+        }
+    }
+
+    async testGetTabs() {
+        try {
+            this.logDebug('🔍 Testing getTabs...');
+            
+            const response = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({ action: 'getTabs' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(response);
+                    }
+                });
+            });
+            
+            if (response.tabs) {
+                this.logDebug(`✅ GetTabs successful: Found ${response.tabs.length} tabs`, 'success');
+                if (response.tabs.length > 0) {
+                    this.logDebug(`📋 Sample tabs:`, 'info');
+                    response.tabs.slice(0, 3).forEach((tab, index) => {
+                        this.logDebug(`   ${index + 1}. ${tab.title} (${tab.url})`, 'info');
+                    });
+                }
+            } else {
+                this.logDebug(`⚠️ GetTabs response missing tabs: ${JSON.stringify(response)}`, 'warning');
+            }
+            
+        } catch (error) {
+            this.logDebug(`❌ GetTabs failed: ${error.message}`, 'error');
+        }
+    }
+
+    async testGetCategories() {
+        try {
+            this.logDebug('🔍 Testing getCategories...');
+            
+            const response = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({ action: 'getCategories' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(response);
+                    }
+                });
+            });
+            
+            if (response.categories) {
+                const categoryCount = Object.keys(response.categories).length;
+                this.logDebug(`✅ GetCategories successful: Found ${categoryCount} categories`, 'success');
+                
+                Object.entries(response.categories).forEach(([category, tabs]) => {
+                    this.logDebug(`   📁 ${category}: ${tabs.length} tabs`, 'info');
+                });
+            } else {
+                this.logDebug(`⚠️ GetCategories response missing categories: ${JSON.stringify(response)}`, 'warning');
+            }
+            
+        } catch (error) {
+            this.logDebug(`❌ GetCategories failed: ${error.message}`, 'error');
+        }
+    }
+
+    async testForceRefresh() {
+        try {
+            this.logDebug('🔍 Testing force refresh...');
+            
+            const response = await new Promise((resolve, reject) => {
+                chrome.runtime.sendMessage({ action: 'forceRefreshTabs' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(response);
+                    }
+                });
+            });
+            
+            if (response.success) {
+                this.logDebug(`✅ Force refresh successful: ${response.tabsCount} tabs`, 'success');
+            } else {
+                this.logDebug(`⚠️ Force refresh failed: ${response.error}`, 'warning');
+            }
+            
+        } catch (error) {
+            this.logDebug(`❌ Force refresh failed: ${error.message}`, 'error');
+        }
+    }
 
 }
 
