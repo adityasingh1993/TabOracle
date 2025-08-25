@@ -29,6 +29,8 @@
         "gemini-manager.js",
         "offscreen.html",
         "offscreen.js",
+        "pdf-viewer.html",
+        "pdf-text-layer.js",
         "vendor/pdfjs/pdf.min.js",
         "vendor/pdfjs/pdf.worker.min.js",
         "taboracle_combined.svg"

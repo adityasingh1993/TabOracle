@@ -306,48 +306,7 @@
         header.appendChild(centerHeader);
         header.appendChild(closeButton);
         
-        // Create selected text display
-        // Create selected text container with main popup styling
-        const selectedTextContainer = document.createElement('div');
-        selectedTextContainer.style.cssText = `
-            background: rgba(139, 92, 246, 0.05);
-            border: 1px solid rgba(139, 92, 246, 0.2);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
-            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.1);
-        `;
-        
-        const selectedTextLabel = document.createElement('div');
-        selectedTextLabel.textContent = 'Selected Text:';
-        selectedTextLabel.style.cssText = `
-            font-weight: 600;
-            color: #6d28d9;
-            margin-bottom: 12px;
-            font-size: 14px;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        `;
-        
-        const selectedText = document.createElement('div');
-        selectedText.id = 'explain-selected-text';
-        selectedText.style.cssText = `
-            color: #374151;
-            line-height: 1.6;
-            font-size: 14px;
-            font-style: italic;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: rgba(255, 255, 255, 0.8);
-            padding: 16px;
-            border-radius: 8px;
-            border: 1px solid rgba(139, 92, 246, 0.15);
-            max-height: 200px;
-            overflow-y: auto;
-            word-wrap: break-word;
-            white-space: pre-wrap;
-        `;
-        
-        selectedTextContainer.appendChild(selectedTextLabel);
-        selectedTextContainer.appendChild(selectedText);
+        // Selected text display removed for cleaner UI
         
         // Create loading state with main popup styling
         explainMeLoading = document.createElement('div');
@@ -408,7 +367,6 @@
         
         // Add elements to DOM
         contentContainer.appendChild(header);
-        contentWrapper.appendChild(selectedTextContainer);
         contentWrapper.appendChild(explainMeLoading);
         contentWrapper.appendChild(explainMeContent);
         contentContainer.appendChild(contentWrapper);
@@ -416,27 +374,7 @@
         document.body.appendChild(explainMeOverlay);
         
         // Debug: Check if elements were created properly
-        console.log('🔍 TabOracle: Overlay created, checking elements...');
-        console.log('🔍 TabOracle: selectedTextContainer:', selectedTextContainer);
-        console.log('🔍 TabOracle: explain-selected-text element:', document.getElementById('explain-selected-text'));
-        console.log('🔍 TabOracle: explain-selected-text parent:', document.getElementById('explain-selected-text')?.parentElement);
-        console.log('🔍 TabOracle: explain-selected-text visibility:', document.getElementById('explain-selected-text')?.style.display);
-        
-        // Test: Try to set some text immediately to verify the element works
-        const testElement = document.getElementById('explain-selected-text');
-        if (testElement) {
-            testElement.textContent = 'TEST: Element is working!';
-            console.log('✅ TabOracle: Test text set successfully');
-            console.log('✅ TabOracle: Test element content:', testElement.textContent);
-            
-            // Clear the test text after a moment
-            setTimeout(() => {
-                testElement.textContent = '';
-                console.log('✅ TabOracle: Test text cleared');
-            }, 1000);
-        } else {
-            console.error('❌ TabOracle: Test element not found after creation');
-        }
+        console.log('🔍 TabOracle: Overlay created successfully');
         
         // Add event listeners
         explainMeOverlay.addEventListener('click', (e) => {
@@ -467,19 +405,10 @@
                 createExplainMeOverlay();
             }
             
-            // Display selected text immediately after overlay creation
-            displaySelectedText(selectedText);
-            
             // Show overlay
             if (explainMeOverlay) {
                 explainMeOverlay.style.display = 'flex';
                 console.log('✅ TabOracle: Explain Me overlay displayed');
-                
-                // Try to display text again after overlay is shown
-                setTimeout(() => {
-                    console.log('🔄 TabOracle: Retrying text display after overlay shown...');
-                    displaySelectedText(selectedText);
-                }, 100);
                 
                 // Start AI explanation
                 generateExplanation(selectedText);
@@ -491,94 +420,7 @@
         }
     }
 
-    function displaySelectedText(selectedText) {
-        console.log('🔍 TabOracle: Displaying selected text:', selectedText ? selectedText.substring(0, 50) + '...' : 'NO TEXT');
-        
-        // Try multiple approaches to find and set the text
-        let textElement = document.getElementById('explain-selected-text');
-        
-        if (textElement) {
-            console.log('✅ TabOracle: Found explain-selected-text element, setting text');
-            
-            if (selectedText && selectedText.trim() !== '') {
-                textElement.textContent = selectedText;
-                textElement.style.display = 'block';
-                textElement.style.visibility = 'visible';
-                textElement.style.border = '1px solid rgba(139, 92, 246, 0.15)';
-                textElement.style.background = 'rgba(255, 255, 255, 0.8)';
-                
-                // Force a reflow to ensure visibility
-                textElement.offsetHeight;
-                
-                console.log('✅ TabOracle: Text set successfully, element content:', textElement.textContent);
-                console.log('✅ TabOracle: Element display style:', textElement.style.display);
-                console.log('✅ TabOracle: Element visibility style:', textElement.style.visibility);
-            } else {
-                // Show "no text selected" message
-                textElement.textContent = 'No text selected. Please select some text on the page and try again.';
-                textElement.style.display = 'block';
-                textElement.style.visibility = 'visible';
-                textElement.style.border = '1px solid rgba(239, 68, 68, 0.3)';
-                textElement.style.background = 'rgba(239, 68, 68, 0.05)';
-                textElement.style.color = '#dc2626';
-                textElement.style.fontStyle = 'normal';
-                
-                console.log('⚠️ TabOracle: No text selected, showing warning message');
-            }
-        } else {
-            console.warn('⚠️ TabOracle: explain-selected-text element not found, trying alternative approach');
-            
-            // Try to find the element by class or other means
-            const selectedTextContainer = document.querySelector('[id*="explain-selected-text"]');
-            if (selectedTextContainer) {
-                console.log('✅ TabOracle: Found alternative selected text container');
-                if (selectedText && selectedText.trim() !== '') {
-                    selectedTextContainer.textContent = selectedText;
-                } else {
-                    selectedTextContainer.textContent = 'No text selected. Please select some text on the page and try again.';
-                }
-            } else {
-                console.error('❌ TabOracle: Could not find any selected text container');
-                
-                // Create a temporary display as fallback
-                const fallbackDisplay = document.createElement('div');
-                fallbackDisplay.style.cssText = `
-                    background: ${selectedText && selectedText.trim() !== '' ? 'rgba(139, 92, 246, 0.1)' : 'rgba(239, 68, 68, 0.05)'};
-                    border: 1px solid ${selectedText && selectedText.trim() !== '' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(239, 68, 68, 0.3)'};
-                    border-radius: 8px;
-                    padding: 16px;
-                    margin: 16px 0;
-                    color: ${selectedText && selectedText.trim() !== '' ? '#4b5563' : '#dc2626'};
-                    font-style: ${selectedText && selectedText.trim() !== '' ? 'italic' : 'normal'};
-                    font-size: 14px;
-                    line-height: 1.6;
-                `;
-                fallbackDisplay.textContent = selectedText && selectedText.trim() !== '' 
-                    ? `Selected Text: ${selectedText}` 
-                    : 'No text selected. Please select some text on the page and try again.';
-                
-                // Try to add it to the content area
-                const contentArea = document.getElementById('explain-content');
-                if (contentArea) {
-                    contentArea.insertBefore(fallbackDisplay, contentArea.firstChild);
-                }
-            }
-        }
-        
-        // Retry mechanism - if text element still not found, try again after a short delay
-        if (!textElement && !document.getElementById('explain-selected-text')) {
-            console.log('🔄 TabOracle: Text element not found, retrying after delay...');
-            setTimeout(() => {
-                const retryElement = document.getElementById('explain-selected-text');
-                if (retryElement && selectedText && selectedText.trim() !== '') {
-                    console.log('✅ TabOracle: Retry successful, setting text');
-                    retryElement.textContent = selectedText;
-                    retryElement.style.display = 'block';
-                    retryElement.style.visibility = 'visible';
-                }
-            }, 200);
-        }
-    }
+
 
     function hideExplainMe() {
         if (explainMeOverlay) {
@@ -1009,12 +851,27 @@ Keep the response clean and readable.`;
                 console.log('🔍 TabOracle: Message selectedText length:', message.selectedText ? message.selectedText.length : 'undefined');
                 console.log('🔍 TabOracle: Message selectedText trimmed:', message.selectedText ? message.selectedText.trim() : 'undefined');
                 
-                // Validate selected text
+                // Check if we're on a PDF page and have PDF overlay
+                const isPDFPage = window.location.href.toLowerCase().includes('.pdf') || 
+                                 document.contentType === 'application/pdf';
+                
                 let selectedText = message.selectedText;
+                
                 if (!selectedText || selectedText.trim() === '') {
                     console.warn('⚠️ TabOracle: No selected text in message, trying to get from page selection');
-                    selectedText = window.getSelection().toString().trim();
-                    console.log('🔍 TabOracle: Got selected text from page:', selectedText ? selectedText.substring(0, 100) + '...' : 'NO TEXT');
+                    
+                    if (isPDFPage && window.tabOraclePDFOverlay) {
+                        // Try to get text from PDF overlay first
+                        console.log('🔍 TabOracle: PDF page detected, checking PDF overlay for selection');
+                        selectedText = window.tabOraclePDFOverlay.getSelectedText();
+                        console.log('🔍 TabOracle: PDF overlay selection:', selectedText ? selectedText.substring(0, 100) + '...' : 'NO TEXT');
+                    }
+                    
+                    // Fallback to regular page selection
+                    if (!selectedText || selectedText.trim() === '') {
+                        selectedText = window.getSelection().toString().trim();
+                        console.log('🔍 TabOracle: Got selected text from page:', selectedText ? selectedText.substring(0, 100) + '...' : 'NO TEXT');
+                    }
                 }
                 
                 if (selectedText && selectedText.trim() !== '') {
@@ -1023,7 +880,19 @@ Keep the response clean and readable.`;
                     sendResponse({ success: true, textLength: selectedText.length });
                 } else {
                     console.error('❌ TabOracle: No text selected on page');
-                    sendResponse({ success: false, error: 'No text selected on page' });
+                    
+                    // If on PDF page, suggest setting up PDF overlay
+                    if (isPDFPage) {
+                        console.log('🔍 TabOracle: PDF page detected but no text selected, suggesting PDF overlay setup');
+                        sendResponse({ 
+                            success: false, 
+                            error: 'No text selected on page. PDF text layer may not be active.',
+                            isPDFPage: true,
+                            suggestion: 'Try setting up PDF text layer overlay'
+                        });
+                    } else {
+                        sendResponse({ success: false, error: 'No text selected on page' });
+                    }
                 }
             } catch (error) {
                 console.error('❌ TabOracle: Error processing Explain Me request:', error);
@@ -1043,6 +912,82 @@ Keep the response clean and readable.`;
             } else {
                 sendResponse({ success: false, error: 'No test text provided' });
             }
+        } else if (message.action === 'setupPDFTextLayer') {
+            // Setup PDF text layer overlay
+            console.log('🔍 TabOracle: Setting up PDF text layer overlay...');
+            
+            // Use async IIFE to handle async operations
+            (async () => {
+                try {
+                    // Check if we're on a PDF page
+                    const isPDFPage = window.location.href.toLowerCase().includes('.pdf') || 
+                                     document.contentType === 'application/pdf';
+                    
+                    if (!isPDFPage) {
+                        sendResponse({ success: false, error: 'Not a PDF page' });
+                        return;
+                    }
+                    
+                    // Check if PDF overlay already exists
+                    if (window.tabOraclePDFOverlay) {
+                        console.log('✅ TabOracle: PDF overlay already exists');
+                        sendResponse({ success: true, message: 'PDF overlay already active' });
+                        return;
+                    }
+                    
+                    // Inject PDF.js if not already available
+                    if (typeof pdfjsLib === 'undefined') {
+                        console.log('🔍 TabOracle: Injecting PDF.js library...');
+                        const script = document.createElement('script');
+                        script.src = chrome.runtime.getURL('vendor/pdfjs/pdf.min.js');
+                        document.head.appendChild(script);
+                        
+                        // Wait for PDF.js to load
+                        await new Promise((resolve) => {
+                            script.onload = resolve;
+                            setTimeout(resolve, 2000); // Timeout after 2 seconds
+                        });
+                    }
+                    
+                    // Inject PDF text layer script
+                    if (!document.querySelector('script[src*="pdf-text-layer.js"]')) {
+                        console.log('🔍 TabOracle: Injecting PDF text layer script...');
+                        const script = document.createElement('script');
+                        script.src = chrome.runtime.getURL('pdf-text-layer.js');
+                        document.head.appendChild(script);
+                        
+                        // Wait for script to load and initialize
+                        await new Promise((resolve) => {
+                            script.onload = () => {
+                                setTimeout(() => {
+                                    if (window.tabOraclePDFOverlay) {
+                                        console.log('✅ TabOracle: PDF overlay initialized successfully');
+                                        resolve();
+                                    } else {
+                                        console.error('❌ TabOracle: PDF overlay failed to initialize');
+                                        resolve();
+                                    }
+                                }, 1000);
+                            };
+                            setTimeout(resolve, 3000); // Timeout after 3 seconds
+                        });
+                    }
+                    
+                    if (window.tabOraclePDFOverlay) {
+                        console.log('✅ TabOracle: PDF text layer overlay setup complete');
+                        sendResponse({ success: true, message: 'PDF text layer overlay setup complete' });
+                    } else {
+                        console.error('❌ TabOracle: Failed to setup PDF text layer overlay');
+                        sendResponse({ success: false, error: 'Failed to setup PDF text layer overlay' });
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ TabOracle: Error setting up PDF text layer overlay:', error);
+                    sendResponse({ success: false, error: error.message });
+                }
+            })();
+            
+            return true; // Keep message channel open for async response
         }
         
         // Return true to indicate async response

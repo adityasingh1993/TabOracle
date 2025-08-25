@@ -1957,6 +1957,11 @@ class TabOraclePopup {
             testExplainMeBtn.addEventListener('click', () => this.testExplainMe());
         }
         
+        const testPDFTextLayerBtn = document.getElementById('testPDFTextLayer');
+        if (testPDFTextLayerBtn) {
+            testPDFTextLayerBtn.addEventListener('click', () => this.testPDFTextLayer());
+        }
+        
         if (testBasicSearchBtn) {
             testBasicSearchBtn.addEventListener('click', () => this.testBasicSearch());
         }
@@ -2183,6 +2188,49 @@ class TabOraclePopup {
             
         } catch (error) {
             this.logDebug(`❌ Explain Me test error: ${error.message}`, 'error');
+        }
+    }
+    
+    // Test PDF Text Layer functionality
+    async testPDFTextLayer() {
+        try {
+            this.logDebug('📄 Testing PDF Text Layer functionality...');
+            
+            // Get active tab
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (!tabs || tabs.length === 0) {
+                this.logDebug('❌ No active tab found for PDF Text Layer test', 'error');
+                return;
+            }
+            
+            const activeTab = tabs[0];
+            this.logDebug(`📄 Active tab: ${activeTab.title} (${activeTab.url})`);
+            
+            // Check if it's a PDF page
+            const isPDFPage = activeTab.url.toLowerCase().includes('.pdf');
+            if (!isPDFPage) {
+                this.logDebug('⚠️ Current page is not a PDF. PDF Text Layer only works on PDF pages.', 'warning');
+                return;
+            }
+            
+            this.logDebug('📄 PDF page detected, setting up PDF Text Layer...');
+            
+            // Send message to background script to setup PDF text layer
+            chrome.runtime.sendMessage({
+                action: 'setupPDFTextLayer',
+                tabId: activeTab.id
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    this.logDebug(`❌ PDF Text Layer test failed: ${chrome.runtime.lastError.message}`, 'error');
+                } else if (response && response.success) {
+                    this.logDebug(`✅ PDF Text Layer test successful: ${response.message}`, 'success');
+                } else {
+                    this.logDebug(`⚠️ PDF Text Layer test response: ${JSON.stringify(response)}`, 'warning');
+                }
+            });
+            
+        } catch (error) {
+            this.logDebug(`❌ PDF Text Layer test error: ${error.message}`, 'error');
         }
     }
 

@@ -36,6 +36,7 @@ try {
 // ===== TAB MANAGEMENT =====
 let tabs = [];
 let currentTabId = null;
+let contextMenuCreated = false;
 
 // Initialize tabs on startup
 function initializeTabs() {
@@ -153,6 +154,70 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }).catch((error) => {
             console.error('❌ TabOracle: Force refresh failed:', error);
             sendResponse({ success: false, error: error.message });
+        });
+        return true; // Keep message channel open
+    }
+    
+    // Handle PDF processing requests
+    if (message.action === 'offscreenParsePdf') {
+        console.log('🔍 TabOracle: PDF parsing request received for URL:', message.url);
+        
+        // Forward to offscreen document
+        chrome.runtime.sendMessage({
+            action: 'offscreenParsePdf',
+            url: message.url
+        }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('❌ TabOracle: Offscreen PDF parsing failed:', chrome.runtime.lastError);
+                sendResponse({ success: false, error: chrome.runtime.lastError.message });
+            } else {
+                console.log('✅ TabOracle: Offscreen PDF parsing successful');
+                sendResponse(response);
+            }
+        });
+        return true; // Keep message channel open
+    }
+
+    // Handle AI explanation requests from extension pages (e.g., pdf-viewer)
+    if (message.action === 'handleAIExplanationRequest') {
+        handleAIExplanationRequest(message, sender, sendResponse);
+        return true; // async
+    }
+    
+    // Background fetch for PDFs to bypass CORS; returns ArrayBuffer
+    if (message.action === 'fetchPdfAsData') {
+        (async () => {
+            try {
+                console.log('🔍 TabOracle: fetchPdfAsData for URL:', message.url);
+                const resp = await fetch(message.url, { credentials: 'include', mode: 'cors' });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const buf = await resp.arrayBuffer();
+                // Send as transferable to avoid cloning cost
+                sendResponse({ success: true, data: buf }, [buf]);
+            } catch (e) {
+                console.error('❌ TabOracle: fetchPdfAsData failed:', e);
+                sendResponse({ success: false, error: e.message });
+            }
+        })();
+        return true; // async
+    }
+    
+    // Handle PDF text layer overlay requests
+    if (message.action === 'setupPDFTextLayer') {
+        console.log('🔍 TabOracle: PDF text layer setup request for tab:', message.tabId);
+        
+        // Inject PDF text layer script
+        chrome.scripting.executeScript({
+            target: { tabId: message.tabId },
+            files: ['pdf-text-layer.js']
+        }, (results) => {
+            if (chrome.runtime.lastError) {
+                console.error('❌ TabOracle: Failed to inject PDF text layer:', chrome.runtime.lastError);
+                sendResponse({ success: false, error: chrome.runtime.lastError.message });
+            } else {
+                console.log('✅ TabOracle: PDF text layer script injected successfully');
+                sendResponse({ success: true });
+            }
         });
         return true; // Keep message channel open
     }
@@ -377,18 +442,59 @@ async function processArXivPaper(url) {
 
 async function processPDFFile(tabId) {
     try {
-        // Execute PDF.js to extract text
-        const results = await chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            files: ['pdf.js']
+        console.log('🔍 TabOracle: Processing PDF file for tab:', tabId);
+        
+        // Get tab info to get the PDF URL
+        const tab = await new Promise((resolve) => {
+            chrome.tabs.get(tabId, (tab) => {
+                if (chrome.runtime.lastError) {
+                    resolve(null);
+                } else {
+                    resolve(tab);
+                }
+            });
         });
         
-        // This would need proper PDF.js integration
-        return {
-            title: 'PDF Document',
-            content: 'PDF content extraction not yet implemented',
-            type: 'pdf'
-        };
+        if (!tab || !tab.url) {
+            console.error('❌ TabOracle: Cannot get tab URL for PDF processing');
+            return null;
+        }
+        
+        console.log('🔍 TabOracle: PDF URL:', tab.url);
+        
+        // Use offscreen document to process PDF
+        const response = await new Promise((resolve) => {
+            chrome.runtime.sendMessage({
+                action: 'offscreenParsePdf',
+                url: tab.url
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    resolve({ success: false, error: chrome.runtime.lastError.message });
+                } else {
+                    resolve(response);
+                }
+            });
+        });
+        
+        if (response && response.success) {
+            console.log('✅ TabOracle: PDF text extracted successfully, length:', response.contentLength);
+            return {
+                title: tab.title || 'PDF Document',
+                content: response.content,
+                type: 'pdf',
+                url: tab.url,
+                textLength: response.contentLength
+            };
+        } else {
+            console.error('❌ TabOracle: PDF text extraction failed:', response?.error);
+            return {
+                title: tab.title || 'PDF Document',
+                content: 'PDF content extraction failed',
+                type: 'pdf',
+                url: tab.url,
+                error: response?.error
+            };
+        }
         
     } catch (error) {
         console.error('❌ TabOracle: Error processing PDF file:', error);
@@ -463,86 +569,44 @@ function extractKeyTopics(content) {
 function createExplainMeContextMenu() {
     return new Promise((resolve, reject) => {
         try {
-            console.log('🔍 TabOracle: Attempting to create Explain Me context menu...');
+            console.log('🔍 TabOracle: Creating Explain Me context menu...');
             
             // Check if contextMenus API is available
-            if (!chrome.contextMenus) {
+            if (!chrome.contextMenus || typeof chrome.contextMenus.create !== 'function') {
                 console.error('❌ TabOracle: contextMenus API not available');
                 reject(new Error('contextMenus API not available'));
                 return;
             }
             
-            // Test if contextMenus API is working
-            console.log('🔍 TabOracle: Testing contextMenus API...');
-            console.log('🔍 TabOracle: chrome.contextMenus available:', !!chrome.contextMenus);
-            console.log('🔍 TabOracle: chrome.contextMenus.create available:', !!chrome.contextMenus.create);
-            console.log('🔍 TabOracle: chrome.contextMenus.remove available:', !!chrome.contextMenus.remove);
-            
-            // Check if contextMenus API is actually working
-            if (!chrome.contextMenus || typeof chrome.contextMenus.create !== 'function') {
-                console.error('❌ TabOracle: contextMenus API not available or not working');
-                reject(new Error('contextMenus API not working'));
-                return;
-            }
-            
-            // First, try to remove any existing menu to avoid conflicts
-            chrome.contextMenus.remove('explainMe', () => {
-                // Wait a bit then create the new menu
-                setTimeout(() => {
-                    createMainContextMenu().then(resolve).catch(reject);
-                }, 200);
-            });
-            
-        } catch (error) {
-            console.error('❌ TabOracle: Error in createExplainMeContextMenu:', error);
-            // Try direct creation as fallback
-            createMainContextMenu().then(resolve).catch(reject);
-        }
-    });
-}
-
-function createMainContextMenu() {
-    return new Promise((resolve, reject) => {
-        try {
-            console.log('🔍 TabOracle: Creating Explain Me context menu...');
-            
-            // Check if contextMenus API is still available
-            if (!chrome.contextMenus || typeof chrome.contextMenus.create !== 'function') {
-                console.error('❌ TabOracle: contextMenus API not available in createMainContextMenu');
-                reject(new Error('contextMenus API not available'));
-                return;
-            }
-            
+            // Create the context menu directly - no removal, just create
             const menuOptions = {
                 id: 'explainMe',
                 title: 'Explain me TabOracle',
-                contexts: ['selection'],
-                documentUrlPatterns: ['<all_urls>']
+                contexts: ['selection']
             };
             
             console.log('🔍 TabOracle: Creating context menu with options:', menuOptions);
             
             chrome.contextMenus.create(menuOptions, () => {
                 if (chrome.runtime.lastError) {
-                    const error = chrome.runtime.lastError;
-                    console.error('❌ TabOracle: Failed to create context menu:', {
-                        message: error.message,
-                        stack: error.stack,
-                        error: error
-                    });
-                    reject(new Error(`Failed to create context menu: ${error.message}`));
+                    const msg = chrome.runtime.lastError.message || '';
+                    console.error('❌ TabOracle: Failed to create context menu:', chrome.runtime.lastError);
+                    reject(new Error(`Failed to create context menu: ${msg}`));
                 } else {
                     console.log('✅ TabOracle: Explain Me context menu created successfully');
+                    contextMenuCreated = true;
                     resolve();
                 }
             });
             
         } catch (error) {
-            console.error('❌ TabOracle: Error in createMainContextMenu:', error);
+            console.error('❌ TabOracle: Error in createExplainMeContextMenu:', error);
             reject(error);
         }
     });
 }
+
+
 
 // Function to verify context menu creation
 function verifyContextMenuCreation() {
@@ -640,17 +704,76 @@ async function handleAIExplanationRequest(message, sender, sendResponse) {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     console.log('🔍 TabOracle: Context menu clicked:', info.menuItemId);
     
-    if (info.menuItemId === 'explainMe' && info.selectionText) {
+    if (info.menuItemId === 'explainMe') {
         try {
-            console.log('🔍 TabOracle: Explain Me requested for text:', info.selectionText.substring(0, 100) + '...');
+            const rawUrl = info.pageUrl || tab?.url || '';
+            console.log('🔍 TabOracle: Explain Me requested. Page URL:', rawUrl);
+
+            // Detect Chrome's built-in PDF viewer (mhjfbmdgcfjbbpaeojofohoefgiehjai)
+            let pdfSrcFromViewer = null;
+            try {
+                const u = new URL(rawUrl);
+                if (u.protocol === 'chrome-extension:' && /mhjfbmdgcfjbbpaeojofohoefgiehjai/i.test(u.host)) {
+                    // Chromium PDF viewer uses ?src= or ?file=
+                    pdfSrcFromViewer = u.searchParams.get('src') || u.searchParams.get('file');
+                    if (pdfSrcFromViewer) {
+                        // Built-in viewer may encode the URL
+                        try { pdfSrcFromViewer = decodeURIComponent(pdfSrcFromViewer); } catch (_e) {}
+                    }
+                }
+            } catch (_e) {}
+
+            const effectivePdfUrl = pdfSrcFromViewer || rawUrl;
+            const isPdf = /\.pdf($|[?#])/i.test(effectivePdfUrl);
+
+            // If PDF (direct or built-in viewer), route to our viewer page
+            if (isPdf) {
+                const viewerUrl = chrome.runtime.getURL('pdf-viewer.html') + `?src=${encodeURIComponent(effectivePdfUrl)}`;
+                console.log('📄 TabOracle: Opening PDF viewer:', viewerUrl);
+                await chrome.tabs.create({ url: viewerUrl });
+                return;
+            }
+
+            // For non-PDF pages, try to get a valid tab
+            let validTab = tab;
+            
+            // If tab is invalid, try to get the active tab
+            if (!validTab || !validTab.id || validTab.id === -1) {
+                console.log('🔍 TabOracle: Invalid tab received, trying to get active tab...');
+                try {
+                    const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                    if (activeTabs && activeTabs.length > 0) {
+                        validTab = activeTabs[0];
+                        console.log('✅ TabOracle: Found active tab:', validTab.id);
+                    } else {
+                        console.error('❌ TabOracle: No active tab found');
+                        return;
+                    }
+                } catch (error) {
+                    console.error('❌ TabOracle: Error getting active tab:', error);
+                    return;
+                }
+            }
+            
+            // Final validation
+            if (!validTab || !validTab.id || validTab.id === -1) {
+                console.error('❌ TabOracle: Still no valid tab for Explain Me request');
+                return;
+            }
+
+            if (info.selectionText) {
+                console.log('🔍 TabOracle: Explain Me requested for text:', info.selectionText.substring(0, 100) + '...');
+            } else {
+                console.log('🔍 TabOracle: No selection text provided, will request from content script');
+            }
             
             // Test if content script is ready before sending message
-            const testResult = await testContentScript(tab.id);
+            const testResult = await testContentScript(validTab.id);
             if (!testResult) {
                 console.warn('⚠️ TabOracle: Content script not ready, injecting and retrying...');
                 // Inject content script and wait
                 await chrome.scripting.executeScript({
-                    target: { tabId: tab.id },
+                    target: { tabId: validTab.id },
                     files: ['content.js']
                 });
                 // Wait for content script to initialize
@@ -658,7 +781,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             }
             
             // Send message to content script
-            chrome.tabs.sendMessage(tab.id, {
+            chrome.tabs.sendMessage(validTab.id, {
                 action: 'showExplainMe',
                 selectedText: info.selectionText
             }, (response) => {
@@ -667,7 +790,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
                     
                     // Fallback: Show alert with selected text
                     chrome.scripting.executeScript({
-                        target: { tabId: tab.id },
+                        target: { tabId: validTab.id },
                         func: (text) => {
                             alert(`Explain Me Feature\n\nSelected Text: ${text.substring(0, 200)}...\n\nNote: Content script communication failed. Please refresh the page and try again.`);
                         },
@@ -675,6 +798,52 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
                     });
                 } else {
                     console.log('✅ TabOracle: Message sent to content script successfully');
+                    
+                    // Check if this is a PDF page and PDF overlay setup is needed
+                    if (response && response.isPDFPage && !response.success) {
+                        console.log('🔍 TabOracle: PDF page detected, setting up PDF text layer overlay...');
+                        
+                        // Set up PDF text layer overlay
+                        chrome.tabs.sendMessage(validTab.id, {
+                            action: 'setupPDFTextLayer'
+                        }, (setupResponse) => {
+                            if (chrome.runtime.lastError) {
+                                console.error('❌ TabOracle: Failed to setup PDF text layer:', chrome.runtime.lastError);
+                            } else if (setupResponse && setupResponse.success) {
+                                console.log('✅ TabOracle: PDF text layer overlay setup successful');
+                                
+                                // Show notification to user
+                                chrome.scripting.executeScript({
+                                    target: { tabId: validTab.id },
+                                    func: () => {
+                                        const notification = document.createElement('div');
+                                        notification.style.cssText = `
+                                            position: fixed;
+                                            top: 20px;
+                                            left: 50%;
+                                            transform: translateX(-50%);
+                                            background: #059669;
+                                            color: white;
+                                            padding: 15px 20px;
+                                            border-radius: 8px;
+                                            font-family: Arial, sans-serif;
+                                            font-size: 14px;
+                                            z-index: 10001;
+                                            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                                        `;
+                                        notification.textContent = '✅ PDF Text Layer activated! You can now select text from the PDF.';
+                                        document.body.appendChild(notification);
+                                        
+                                        setTimeout(() => {
+                                            notification.remove();
+                                        }, 5000);
+                                    }
+                                });
+                            } else {
+                                console.error('❌ TabOracle: PDF text layer overlay setup failed:', setupResponse?.error);
+                            }
+                        });
+                    }
                 }
             });
             
@@ -803,76 +972,43 @@ chrome.runtime.onInstalled.addListener(() => {
     }, 1000);
 });
 
-// Create context menu immediately and also after delays
-console.log('🔍 TabOracle: Creating context menu immediately...');
-createExplainMeContextMenu().then(() => {
-    console.log('✅ TabOracle: Context menu created immediately');
-}).catch((error) => {
-    console.error('❌ TabOracle: Failed to create context menu immediately:', error);
-});
-
-// Wait for browser to be fully ready before creating context menu again
-setTimeout(() => {
-    console.log('🔍 TabOracle: Browser ready, creating context menu...');
-    createExplainMeContextMenu().then(() => {
-        console.log('✅ TabOracle: Context menu created after delay');
-    }).catch((error) => {
-        console.error('❌ TabOracle: Failed to create context menu after delay:', error);
-    });
-}, 1000);
-
-// Additional creation attempts
-setTimeout(() => {
-    console.log('🔍 TabOracle: Additional context menu creation attempt...');
-    createExplainMeContextMenu().then(() => {
-        console.log('✅ TabOracle: Context menu created on additional attempt');
-    }).catch((error) => {
-        console.error('❌ TabOracle: Failed to create context menu on additional attempt:', error);
-    });
-}, 3000);
-
-// Check context menu after a longer delay
-setTimeout(verifyContextMenuCreation, 5000);
-
-// ===== SIMPLE CONTEXT MENU CREATION (FALLBACK) =====
-function createSimpleContextMenu() {
-    try {
-        console.log('🔍 TabOracle: Creating simple context menu (fallback)...');
-        
-        if (!chrome.contextMenus || typeof chrome.contextMenus.create !== 'function') {
-            console.error('❌ TabOracle: contextMenus API not available for simple creation');
-            return;
-        }
-        
-        // Create the simplest possible context menu
-        const simpleOptions = {
-            id: 'explainMe',
-            title: 'Explain me TabOracle',
-            contexts: ['selection']
-        };
-        
-        chrome.contextMenus.create(simpleOptions, () => {
-            if (chrome.runtime.lastError) {
-                const error = chrome.runtime.lastError;
-                console.error('❌ TabOracle: Simple context menu creation failed:', {
-                    message: error.message,
-                    error: error
-                });
-            } else {
-                console.log('✅ TabOracle: Simple context menu created successfully');
-            }
-        });
-        
-    } catch (error) {
-        console.error('❌ TabOracle: Error in createSimpleContextMenu:', error);
+// Single context menu creation function
+function ensureContextMenu() {
+    if (contextMenuCreated) {
+        console.log('ℹ️ TabOracle: Context menu already created, skipping');
+        return;
     }
+    
+    console.log('🔍 TabOracle: Creating context menu...');
+    chrome.contextMenus.create({
+        id: 'explainMe',
+        title: 'Explain me TabOracle',
+        contexts: ['selection']
+    }, () => {
+        if (chrome.runtime.lastError) {
+            console.error('❌ TabOracle: Context menu creation failed:', chrome.runtime.lastError);
+        } else {
+            console.log('✅ TabOracle: Context menu created successfully');
+            contextMenuCreated = true;
+        }
+    });
 }
 
-// Try simple context menu creation after a delay
-setTimeout(() => {
-    console.log('🔍 TabOracle: Trying simple context menu creation...');
-    createSimpleContextMenu();
-}, 6000);
+// Create context menu on startup
+chrome.runtime.onStartup.addListener(() => {
+    console.log('🔍 TabOracle: Extension started');
+    ensureContextMenu();
+});
+
+// Create context menu on install/update
+chrome.runtime.onInstalled.addListener(() => {
+    console.log('🔍 TabOracle: Extension installed/updated');
+    ensureContextMenu();
+});
+
+// Create context menu immediately
+console.log('🔍 TabOracle: Extension loading');
+ensureContextMenu();
 
 // ===== KEYBOARD SHORTCUTS =====
 chrome.commands.onCommand.addListener((command) => {
