@@ -81,6 +81,7 @@
     let explainMeOverlay = null;
     let explainMeContent = null;
     let explainMeLoading = null;
+    let explainPinned = false;
 
     function createExplainMeOverlay() {
         try {
@@ -100,19 +101,22 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: transparent;
             z-index: 999998;
             display: none;
             align-items: center;
             justify-content: center;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            backdrop-filter: blur(20px);
+            backdrop-filter: none;
+            pointer-events: none; /* allow interacting/scrolling the page beneath */
         `;
         
         // Create content container with main popup styling
+        const headerHeight = 44; // keep header height consistent
         const contentContainer = document.createElement('div');
         contentContainer.style.cssText = `
-            background: rgba(255, 255, 255, 0.95);
+            /* Gradient so curved top corners render purple instead of white */
+            background: linear-gradient(180deg, #6d28d9 0px, #6d28d9 ${headerHeight}px, rgba(255, 255, 255, 0.95) ${headerHeight}px);
             backdrop-filter: blur(20px);
             border-radius: 20px;
             padding: 0;
@@ -124,6 +128,9 @@
             border: 1px solid rgba(139, 92, 246, 0.25);
             animation: slideInExplain 0.3s ease-out;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            pointer-events: auto; /* panel remains interactive */
         `;
         
         // Create header with new three-column layout styling
@@ -136,13 +143,13 @@
             border-bottom: 2px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4), 0 4px 16px rgba(0, 0, 0, 0.15);
             backdrop-filter: blur(20px);
-            overflow: hidden;
+            overflow: visible;
             display: flex;
             align-items: center;
             justify-content: space-between;
             border-radius: 20px 20px 0 0;
             margin: 0 0 24px 0;
-            height: 50px;
+            height: 44px;
             box-sizing: border-box;
         `;
         
@@ -153,14 +160,16 @@
         tabOracleLogo.src = svgUrl;
         tabOracleLogo.alt = 'TabOracle';
         tabOracleLogo.style.cssText = `
-            width: 180px;
-            height: 70px;
+            width: 120px;
+            height: 40px;
             filter: drop-shadow(0 1px 3px rgba(251, 191, 36, 0.3));
             z-index: 1;
             position: relative;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: block;
             max-width: 100%;
+            flex: 0 0 auto;
+            margin-right: 8px;
         `;
         
         // Add error handling for SVG loading
@@ -200,7 +209,7 @@
         const searchIcon = document.createElement('div');
         searchIcon.innerHTML = '🔍';
         searchIcon.style.cssText = `
-            font-size: 24px;
+            font-size: 16px;
             color: #fbbf24;
             filter: drop-shadow(0 1px 3px rgba(251, 191, 36, 0.3));
             z-index: 1;
@@ -227,7 +236,7 @@
         title.style.cssText = `
             margin: 0;
             color: white;
-            font-size: 24px;
+            font-size: 16px;
             font-weight: 700;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             z-index: 1;
@@ -235,7 +244,7 @@
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
             display: flex;
             align-items: center;
-            height: 50px;
+            height: 44px;
         `;
         
         // Add shimmer animation
@@ -271,7 +280,7 @@
             background: none;
             border: none;
             color: white;
-            font-size: 18px;
+            font-size: 14px;
             font-weight: 700;
             cursor: pointer;
             display: flex;
@@ -297,6 +306,101 @@
         closeButton.addEventListener('click', () => {
             hideExplainMe();
         });
+
+        // Create pin button (dock/undock to sidebar)
+        const pinButton = document.createElement('button');
+        pinButton.title = 'Pin to sidebar';
+        pinButton.textContent = '📌';
+        pinButton.style.cssText = `
+            background: none;
+            border: none;
+            color: white;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 1;
+            margin-right: 8px;
+            opacity: 0.9;
+        `;
+
+        function setExplainPinned(pinned) {
+            explainPinned = pinned;
+            if (pinned) {
+                // Dock overlay panel to right and remove dim backdrop
+                explainMeOverlay.style.background = 'transparent';
+                explainMeOverlay.style.alignItems = 'stretch';
+                explainMeOverlay.style.justifyContent = 'flex-end';
+                contentContainer.style.position = 'fixed';
+                contentContainer.style.top = '0';
+                contentContainer.style.right = '0';
+                contentContainer.style.height = '100vh';
+                contentContainer.style.width = '360px';
+                contentContainer.style.maxWidth = '360px';
+                contentContainer.style.borderRadius = '0';
+                contentContainer.style.boxShadow = '0 0 20px rgba(0,0,0,0.12)';
+                // Condense header
+                header.style.height = '40px';
+                header.style.padding = '8px 12px';
+                header.style.boxShadow = 'none';
+                header.style.background = '#6d28d9';
+                // Show compact logo in pinned mode
+                tabOracleLogo.style.display = 'block';
+                tabOracleLogo.style.width = '90px';
+                tabOracleLogo.style.height = '30px';
+                // Tighten center header
+                centerHeader.style.gap = '8px';
+                title.style.fontSize = '16px';
+                // Reduce content padding
+                contentWrapper.style.padding = '16px';
+                // Adjust scroll area height for pinned header
+                explainMeContent.style.maxHeight = 'calc(100vh - 40px - 16px - 16px)';
+            } else {
+                // Restore centered dialog
+                explainMeOverlay.style.background = 'rgba(0, 0, 0, 0.7)';
+                explainMeOverlay.style.alignItems = 'center';
+                explainMeOverlay.style.justifyContent = 'center';
+                contentContainer.style.position = 'relative';
+                contentContainer.style.top = '';
+                contentContainer.style.right = '';
+                contentContainer.style.height = '';
+                contentContainer.style.width = '800px';
+                contentContainer.style.maxWidth = '90vw';
+                contentContainer.style.borderRadius = '20px';
+                contentContainer.style.boxShadow = '0 20px 40px rgba(139, 92, 246, 0.3), 0 8px 32px rgba(0, 0, 0, 0.2)';
+                // Restore header
+                header.style.height = '44px';
+                header.style.padding = '12px 20px';
+                header.style.boxShadow = '0 8px 32px rgba(139, 92, 246, 0.4), 0 4px 16px rgba(0, 0, 0, 0.15)';
+                header.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%)';
+                // Restore logo size in unpinned mode
+                tabOracleLogo.style.display = 'block';
+                tabOracleLogo.style.width = '120px';
+                tabOracleLogo.style.height = '40px';
+                centerHeader.style.gap = '12px';
+                title.style.fontSize = '18px';
+                contentWrapper.style.padding = '32px';
+                explainMeContent.style.maxHeight = 'calc(85vh - 100px)';
+            }
+            pinButton.title = pinned ? 'Unpin from sidebar' : 'Pin to sidebar';
+        }
+
+        pinButton.addEventListener('mouseenter', () => {
+            pinButton.style.transform = 'scale(1.1)';
+            pinButton.style.color = '#fbbf24';
+        });
+        pinButton.addEventListener('mouseleave', () => {
+            pinButton.style.transform = 'scale(1)';
+            pinButton.style.color = 'white';
+        });
+        pinButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setExplainPinned(!explainPinned);
+        });
         
         // Assemble header
         centerHeader.appendChild(title);
@@ -304,7 +408,11 @@
         
         header.appendChild(tabOracleLogo);
         header.appendChild(centerHeader);
-        header.appendChild(closeButton);
+        const rightControls = document.createElement('div');
+        rightControls.style.cssText = 'display:flex; align-items:center; gap:6px;';
+        rightControls.appendChild(pinButton);
+        rightControls.appendChild(closeButton);
+        header.appendChild(rightControls);
         
         // Selected text display removed for cleaner UI
         
@@ -352,7 +460,8 @@
         explainMeContent = document.createElement('div');
         explainMeContent.id = 'explain-content';
         explainMeContent.style.cssText = `
-            max-height: 400px;
+            flex: 1 1 auto;
+            min-height: 0;
             overflow-y: auto;
             line-height: 1.6;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -363,6 +472,11 @@
         contentWrapper.style.cssText = `
             padding: 32px;
             padding-top: 0;
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
         `;
         
         // Add elements to DOM
@@ -377,11 +491,7 @@
         console.log('🔍 TabOracle: Overlay created successfully');
         
         // Add event listeners
-        explainMeOverlay.addEventListener('click', (e) => {
-            if (e.target === explainMeOverlay) {
-                hideExplainMe();
-            }
-        });
+        // Note: overlay is non-interactive to allow page scrolling; close with X or Escape.
         
         // Escape key to close
         document.addEventListener('keydown', (e) => {
@@ -476,7 +586,7 @@ Keep the response clean and readable.`;
                     console.log('🔍 TabOracle: Trying Chrome Language Model API...');
                     const languageModel = await chrome.languageModel.create();
                     const response = await languageModel.prompt(prompt);
-                    let rawResponse = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    let rawResponse = typeof response === 'string' ? response : ((response && response.text) || (response && response.response) || JSON.stringify(response));
                     
                     // Clean the response
                     explanation = cleanAIResponse(rawResponse);
@@ -493,7 +603,7 @@ Keep the response clean and readable.`;
                     console.log('🔍 TabOracle: Trying Global LanguageModel...');
                     const languageModel = await LanguageModel.create();
                     const response = await languageModel.prompt(prompt);
-                    let rawResponse = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    let rawResponse = typeof response === 'string' ? response : ((response && response.text) || (response && response.response) || JSON.stringify(response));
                     
                     // Clean the response
                     explanation = cleanAIResponse(rawResponse);
@@ -510,7 +620,7 @@ Keep the response clean and readable.`;
                     console.log('🔍 TabOracle: Trying Window LanguageModel...');
                     const languageModel = await window.LanguageModel.create();
                     const response = await languageModel.prompt(prompt);
-                    let rawResponse = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    let rawResponse = typeof response === 'string' ? response : ((response && response.text) || (response && response.response) || JSON.stringify(response));
                     
                     // Clean the response
                     explanation = cleanAIResponse(rawResponse);
@@ -527,7 +637,7 @@ Keep the response clean and readable.`;
                     console.log('🔍 TabOracle: Trying GlobalThis LanguageModel...');
                     const languageModel = await globalThis.LanguageModel.create();
                     const response = await languageModel.prompt(prompt);
-                    let rawResponse = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                    let rawResponse = typeof response === 'string' ? response : ((response && response.text) || (response && response.response) || JSON.stringify(response));
                     
                     // Clean the response
                     explanation = cleanAIResponse(rawResponse);
@@ -649,125 +759,53 @@ Keep the response clean and readable.`;
             
             // Add AI status header with main popup styling
             if (aiSource !== 'None') {
+                // Lightweight AI badge with generic label
                 displayContent += `
                     <div style="
-                        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%);
-                        color: white;
-                        padding: 20px;
-                        border-radius: 20px;
-                        margin-bottom: 20px;
-                        text-align: center;
-                        position: relative;
-                        border: 2px solid rgba(255, 255, 255, 0.2);
-                        box-shadow: 0 8px 32px rgba(139, 92, 246, 0.4), 0 4px 16px rgba(0, 0, 0, 0.15);
-                        backdrop-filter: blur(20px);
-                        overflow: hidden;
-                    ">
-                        <div style="
-                            position: absolute;
-                            top: 0;
-                            left: 0;
-                            right: 0;
-                            bottom: 0;
-                            background: 
-                                radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.15) 0%, transparent 50%),
-                                radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-                                linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
-                            pointer-events: none;
-                        "></div>
-                        <div style="
-                            position: absolute;
-                            top: 0;
-                            left: 0;
-                            right: 0;
-                            bottom: 0;
-                            background: 
-                                repeating-linear-gradient(
-                                    45deg,
-                                    transparent,
-                                    transparent 8px,
-                                    rgba(255, 255, 255, 0.02) 8px,
-                                    rgba(255, 255, 255, 0.02) 16px
-                                );
-                            pointer-events: none;
-                        "></div>
-                        <h3 style="margin: 0; font-size: 20px; font-weight: 600; position: relative; z-index: 1;">🤖 AI-Powered Explanation</h3>
-                        <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px; position: relative; z-index: 1;">Generated using: ${aiSource}</p>
-                    </div>
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 6px 10px;
+                        border-radius: 12px;
+                        background: rgba(109, 40, 217, 0.08);
+                        color: #6d28d9;
+                        font-size: 12px;
+                        font-weight: 600;
+                        margin-bottom: 12px;
+                        border: 1px solid rgba(109, 40, 217, 0.15);
+                    ">🤖 <span>AI Generated</span></div>
                 `;
             } else {
                 displayContent += `
                     <div style="
-                        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-                        color: white;
-                        padding: 20px;
-                        border-radius: 20px;
-                        margin-bottom: 20px;
-                        text-align: center;
-                        position: relative;
-                        border: 2px solid rgba(255, 255, 255, 0.2);
-                        box-shadow: 0 8px 32px rgba(243, 147, 251, 0.4), 0 4px 16px rgba(0, 0, 0, 0.15);
-                        backdrop-filter: blur(20px);
-                        overflow: hidden;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 6px 10px;
+                        border-radius: 12px;
+                        background: rgba(245, 158, 11, 0.1);
+                        color: #92400e;
+                        font-size: 12px;
+                        font-weight: 600;
+                        margin-bottom: 12px;
+                        border: 1px solid rgba(245, 158, 11, 0.25);
                     ">
-                        <div style="
-                            position: absolute;
-                            top: 0;
-                            left: 0;
-                            right: 0;
-                            bottom: 0;
-                            background: 
-                                radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.15) 0%, transparent 50%),
-                                radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-                                linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
-                            pointer-events: none;
-                        "></div>
-                        <div style="
-                            position: absolute;
-                            top: 0;
-                            left: 0;
-                            right: 0;
-                            bottom: 0;
-                            background: 
-                                repeating-linear-gradient(
-                                    45deg,
-                                    transparent,
-                                    transparent 8px,
-                                    rgba(255, 255, 255, 0.02) 8px,
-                                    rgba(255, 255, 255, 0.02) 16px
-                                );
-                            pointer-events: none;
-                        "></div>
-                        <h3 style="margin: 0; font-size: 20px; font-weight: 600; position: relative; z-index: 1;">📊 Intelligent Text Analysis</h3>
-                        <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 14px; position: relative; z-index: 1;">AI not available - using fallback analysis</p>
+                        📊 <span>Intelligent Text Analysis</span>
                     </div>
                 `;
                 
-                // Add AI enable instructions with main popup styling
+                // Leaner enable instructions
                 displayContent += `
                     <div style="
-                        background: rgba(255, 255, 255, 0.95);
-                        backdrop-filter: blur(20px);
-                        border: 1px solid rgba(139, 92, 246, 0.25);
-                        border-radius: 16px;
-                        padding: 20px;
-                        margin-bottom: 20px;
-                        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.08);
+                        background: rgba(109, 40, 217, 0.04);
+                        border: 1px dashed rgba(109, 40, 217, 0.25);
+                        border-radius: 10px;
+                        padding: 12px;
+                        margin-bottom: 14px;
                     ">
-                        <h4 style="margin: 0 0 15px 0; color: #6d28d9; font-size: 16px; font-weight: 600;">🔧 How to Enable AI Explanations</h4>
-                        <p style="margin: 0 0 15px 0; color: #4b5563; font-size: 14px; line-height: 1.6;">
-                            To get AI-powered explanations instead of basic text analysis, follow these steps:
-                        </p>
-                        <ol style="margin: 0; padding-left: 20px; color: #4b5563; font-size: 14px; line-height: 1.6;">
-                            <li style="margin-bottom: 8px;"><strong>Update Chrome</strong>: Ensure you're using Chrome 114 or later</li>
-                            <li style="margin-bottom: 8px;"><strong>Enable Language Model API</strong>: Go to <code style="background: rgba(139, 92, 246, 0.1); padding: 2px 6px; border-radius: 4px; color: #6d28d9;">chrome://flags/#enable-language-model-api</code></li>
-                            <li style="margin-bottom: 8px;"><strong>Set to "Enabled"</strong>: Change the flag from "Default" to "Enabled"</li>
-                            <li style="margin-bottom: 8px;"><strong>Restart Chrome</strong>: Close and reopen Chrome completely</li>
-                            <li style="margin-bottom: 8px;"><strong>Grant Permission</strong>: Allow the extension to use the Language Model API when prompted</li>
-                        </ol>
-                        <p style="margin: 15px 0 0 0; color: #6b7280; font-size: 12px; font-style: italic;">
-                            Note: The Language Model API provides access to Gemini Nano for AI-powered explanations.
-                        </p>
+                        <div style="margin: 0; color: #4b5563; font-size: 12px; line-height: 1.5;">
+                            Enable on-device model for AI explanations: chrome://flags/#enable-language-model-api
+                        </div>
                     </div>
                 `;
             }
@@ -775,6 +813,12 @@ Keep the response clean and readable.`;
             // Add the main explanation content
             const formattedExplanation = formatExplanation(explanation);
             displayContent += formattedExplanation;
+            // Disclaimer for AI generated explanations
+            displayContent += `
+                <div style="margin-top: 10px; font-size: 11px; color: #6b7280;">
+                    ⚠️ AI Generated content may be inaccurate. Verify important information.
+                </div>
+            `;
             
             explainMeContent.innerHTML = displayContent;
         }
@@ -1445,6 +1489,23 @@ Keep the response clean and readable.`;
         if (request.action === 'showSearch') {
             showSearch();
             sendResponse({ success: true });
+        } else if (request.action === 'getContent') {
+            // Extract content from the current page
+            try {
+                const content = {
+                    title: document.title,
+                    content: document.body.innerText || document.body.textContent || '',
+                    url: window.location.href,
+                    timestamp: new Date().toISOString()
+                };
+                sendResponse({ success: true, content: content });
+            } catch (error) {
+                console.error('❌ TabOracle: Error extracting content:', error);
+                sendResponse({ success: false, error: error.message });
+            }
+        } else if (request.action === 'test') {
+            // Test message to check if content script is loaded
+            sendResponse({ success: true, message: 'Content script is responding' });
         }
     });
     

@@ -848,13 +848,13 @@ body {
 }
 
 .categories-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: var(--spacing-3);
     padding: var(--spacing-3);
     flex: 1;
     overflow-y: auto;
-    align-content: start;
+    align-content: flex-start;
     min-height: 0;
 }
 
@@ -876,6 +876,8 @@ body {
     position: relative;
     overflow: hidden;
     user-select: none;
+    flex: 1 1 220px; /* row-wise responsive cards */
+    max-width: calc(50% - var(--spacing-3));
 }
 
 .category-card:hover {

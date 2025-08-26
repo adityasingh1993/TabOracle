@@ -192,45 +192,74 @@ class TabOraclePopup {
             // Check for Chrome Language Model (Gemini Nano)
             if (typeof chrome !== 'undefined' && chrome.languageModel && chrome.languageModel.create) {
                 console.log('🔍 TabOracle: Chrome Language Model API available, attempting to initialize...');
-                this.languageModel = await chrome.languageModel.create();
-                this.languageModelInitialized = true;
-                console.log('✅ TabOracle: Chrome Language Model initialized successfully');
-                return;
+                try {
+                    this.languageModel = await chrome.languageModel.create();
+                    // Test the model with a simple prompt
+                    const testResponse = await this.languageModel.prompt('Hello');
+                    if (testResponse) {
+                        this.languageModelInitialized = true;
+                        console.log('✅ TabOracle: Chrome Language Model initialized and tested successfully');
+                        return;
+                    }
+                } catch (modelError) {
+                    console.warn('⚠️ TabOracle: Chrome Language Model failed:', modelError);
+                    if (modelError.name === 'DOMException') {
+                        console.warn('⚠️ TabOracle: DOMException suggests permission or compatibility issue');
+                    }
+                    // Continue to try other methods
+                }
             }
             
             // Check for global LanguageModel (alternative access method)
             if (typeof LanguageModel !== 'undefined' && LanguageModel.create) {
                 console.log('🔍 TabOracle: Global LanguageModel available, attempting to initialize...');
-                this.languageModel = await LanguageModel.create();
-                this.languageModelInitialized = true;
-                console.log('✅ TabOracle: Global LanguageModel initialized successfully');
-                return;
+                try {
+                    this.languageModel = await LanguageModel.create();
+                    const testResponse = await this.languageModel.prompt('Hello');
+                    if (testResponse) {
+                        this.languageModelInitialized = true;
+                        console.log('✅ TabOracle: Global LanguageModel initialized and tested successfully');
+                        return;
+                    }
+                } catch (modelError) {
+                    console.warn('⚠️ TabOracle: Global LanguageModel failed:', modelError);
+                }
             }
             
             // Check for window.LanguageModel (another alternative)
             if (typeof window !== 'undefined' && window.LanguageModel && window.LanguageModel.create) {
                 console.log('🔍 TabOracle: Window LanguageModel available, attempting to initialize...');
-                this.languageModel = await window.LanguageModel.create();
-                this.languageModelInitialized = true;
-                console.log('✅ TabOracle: Window LanguageModel initialized successfully');
-                return;
+                try {
+                    this.languageModel = await window.LanguageModel.create();
+                    const testResponse = await this.languageModel.prompt('Hello');
+                    if (testResponse) {
+                        this.languageModelInitialized = true;
+                        console.log('✅ TabOracle: Window LanguageModel initialized and tested successfully');
+                        return;
+                    }
+                } catch (modelError) {
+                    console.warn('⚠️ TabOracle: Window LanguageModel failed:', modelError);
+                }
             }
             
             // No language model available
-            console.log('⚠️ TabOracle: No language model available on this system (Windows/older Chrome version)');
+            console.log('⚠️ TabOracle: No working language model available on this system');
             console.log('⚠️ TabOracle: Will use intelligent fallback for summaries');
             this.languageModel = null;
             this.languageModelInitialized = true; // Mark as initialized to avoid repeated checks
             
-            // Show notice for Windows users
+            // Show notice
             if (this.geminiNotice) {
                 this.geminiNotice.style.display = 'flex';
-                // Update notice text for Windows users
                 const noticeText = this.geminiNotice.querySelector('.notice-text');
                 if (noticeText) {
                     noticeText.innerHTML = `
                         <strong>AI Features Note:</strong><br>
-                        Chrome Language Model (Gemini Nano) may not be available on Windows yet.<br>
+                        Chrome Language Model (Gemini Nano) is not working on this system.<br>
+                        This may be due to:<br>
+                        • Windows compatibility issues<br>
+                        • Chrome version requirements<br>
+                        • API permission issues<br>
                         TabOracle will use intelligent fallback for summaries.
                     `;
                 }
@@ -246,7 +275,7 @@ class TabOraclePopup {
                 if (noticeText) {
                     noticeText.innerHTML = `
                         <strong>AI Features Note:</strong><br>
-                        Language model initialization failed.<br>
+                        Language model initialization failed: ${e.message}<br>
                         TabOracle will use intelligent fallback for summaries.
                     `;
                 }
@@ -281,10 +310,13 @@ class TabOraclePopup {
                     <div class="empty-state">
                         <div class="icon">🤖</div>
                         <div><strong>AI Features Note</strong></div>
-                        <div>Chrome Language Model (Gemini Nano) is not available on this system.</div>
+                        <div>Chrome Language Model (Gemini Nano) is not working on this system.</div>
                         <div>TabOracle will use intelligent fallback for summaries.</div>
                         <div style="margin-top: 10px; font-size: 12px; color: #666;">
-                            This is normal on Windows or older Chrome versions.
+                            This may be due to Windows compatibility, Chrome version, or API permissions.
+                        </div>
+                        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                            Try the "Generate Summary" button to see the fallback in action.
                         </div>
                     </div>
                 `;
@@ -301,7 +333,23 @@ class TabOraclePopup {
         } catch (error) {
             console.error('❌ TabOracle: Test AI failed:', error);
             this.setSummaryLoading(false);
-            this.pageSummaryContent.innerHTML = `<div class="empty-state error">AI test failed: ${this.escapeHtml(error.message)}</div>`;
+            
+            let errorDetails = error.message;
+            if (error.name === 'DOMException') {
+                errorDetails = 'Permission or compatibility issue with Chrome Language Model API';
+            }
+            
+            this.pageSummaryContent.innerHTML = `
+                <div class="empty-state error">
+                    <div class="icon">❌</div>
+                    <div><strong>AI Test Failed</strong></div>
+                    <div>Error: ${this.escapeHtml(errorDetails)}</div>
+                    <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                        This is likely due to Chrome Language Model API issues.<br>
+                        Try the "Generate Summary" button to use the fallback system.
+                    </div>
+                </div>
+            `;
         }
     }
 
@@ -452,6 +500,9 @@ class TabOraclePopup {
             ${metaHtml}
             <div class="summary-text">${this.escapeHtml(data.summary || '')}</div>
             ${keyPoints ? `<div class="ai-result"><div class="ai-result-header"><div class="ai-result-content"><div class="ai-result-title">Key points</div><ul>${keyPoints}</ul></div></div></div>` : ''}
+            <div class="ai-disclaimer" style="margin-top: 12px; font-size: 11px; color: #6b7280;">
+                ⚠️ AI Generated content may be inaccurate. Verify important information.
+            </div>
         `;
     }
     initializeElements() {
@@ -490,7 +541,8 @@ class TabOraclePopup {
         this.languageModelInitialized = false;
         
         // Footer
-        this.tabCount = document.getElementById('tabCount');
+        // Header tab counter (container has id tabCounter; numeric span has class counter-text)
+        this.tabCountContainer = document.getElementById('tabCounter');
         
         // Refresh button
         this.refreshButton = document.getElementById('refreshButton');
@@ -866,14 +918,11 @@ class TabOraclePopup {
         this.backgroundCategories = categories;
         console.log('🏷️ TabOracle: Stored background categories:', Object.keys(this.backgroundCategories));
         
-        // Convert background script categories to UI format
-        const categoryCards = Object.entries(categories).map(([categoryName, tabs]) => {
+        // Convert background script categories to UI format, filtering out empty ones
+        const categoryCards = Object.entries(categories)
+            .filter(([_name, tabs]) => Array.isArray(tabs) && tabs.length > 0)
+            .map(([categoryName, tabs]) => {
             console.log(`🏷️ TabOracle: Creating card for category: "${categoryName}" with ${tabs.length} tabs`);
-            
-            // Handle empty categories
-            if (tabs.length === 0) {
-                console.log(`🏷️ TabOracle: Category "${categoryName}" is empty, will show empty state`);
-            }
             
             return this.createCategoryCard({
                 name: categoryName,
@@ -1467,7 +1516,7 @@ class TabOraclePopup {
     goBackToCategories() {
         console.log('🔄 TabOracle: Going back to categories');
         // Show categories grid and hide results
-        this.categoriesGrid.style.display = 'grid';
+        this.categoriesGrid.style.display = 'flex';
         this.categoryResults.style.display = 'none';
         console.log('🔄 TabOracle: Categories grid display:', this.categoriesGrid.style.display);
         console.log('🔄 TabOracle: Category results display:', this.categoryResults.style.display);
@@ -1895,9 +1944,12 @@ class TabOraclePopup {
     }
 
     updateTabCount() {
-        if (!this.tabCount) return;
         const n = Array.isArray(this.allTabs) ? this.allTabs.length : 0;
-        this.tabCount.textContent = `${n} tab${n !== 1 ? 's' : ''}`;
+        // Update header counter if present
+        if (this.tabCountContainer) {
+            const counterText = this.tabCountContainer.querySelector('.counter-text');
+            if (counterText) counterText.textContent = `${n}`;
+        }
     }
 
     addTabClickListeners(container) {

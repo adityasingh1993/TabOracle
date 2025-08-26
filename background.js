@@ -37,6 +37,7 @@ try {
 let tabs = [];
 let currentTabId = null;
 let contextMenuCreated = false;
+let contextMenuCreating = false;
 
 // Initialize tabs on startup
 function initializeTabs() {
@@ -286,71 +287,114 @@ async function ensureTabsLoaded() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('🔍 TabOracle: Background script received message:', message);
     
-    // Ensure tabs are loaded before processing any message
-    ensureTabsLoaded().then((currentTabs) => {
+    // Handle async operations properly
+    (async () => {
         try {
+            const currentTabs = await ensureTabsLoaded();
             console.log('🔍 TabOracle: Processing message:', message.action, 'with tabs count:', currentTabs.length);
-            
-            if (message.action === 'getTabs') {
-                // Return all tabs for search
-                console.log('🔍 TabOracle: Returning tabs:', currentTabs.length);
-                sendResponse({ tabs: currentTabs });
-            } else if (message.action === 'searchTabs') {
-                // Search through tabs
-                const query = message.query.toLowerCase();
-                const results = currentTabs.filter(tab => 
-                    tab.title.toLowerCase().includes(query) || 
-                    tab.url.toLowerCase().includes(query)
-                );
-                console.log('🔍 TabOracle: Search results:', results.length);
-                sendResponse({ results: results });
-            } else if (message.action === 'getTabContent') {
-                // Get content from a specific tab
-                chrome.tabs.sendMessage(message.tabId, { action: 'getContent' }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        sendResponse({ error: 'Failed to get tab content' });
-                    } else {
-                        sendResponse(response);
-                    }
-                });
-                return true; // Keep message channel open
-            } else if (message.action === 'generateAIExplanation') {
-                handleAIExplanationRequest(message, sender, sendResponse);
-                return true; // Keep message channel open for async response
-            } else if (message.action === 'getTabInfo') {
-                // Get detailed info about a specific tab
-                const tab = currentTabs.find(t => t.id === message.tabId);
-                if (tab) {
-                    sendResponse({ tab: tab });
+        
+        if (message.action === 'getTabs') {
+            // Return all tabs for search
+            console.log('🔍 TabOracle: Returning tabs:', currentTabs.length);
+            sendResponse({ tabs: currentTabs });
+        } else if (message.action === 'searchTabs') {
+            // Search through tabs
+            const query = message.query.toLowerCase();
+            const results = currentTabs.filter(tab => 
+                tab.title.toLowerCase().includes(query) || 
+                tab.url.toLowerCase().includes(query)
+            );
+            console.log('🔍 TabOracle: Search results:', results.length);
+            sendResponse({ results: results });
+        } else if (message.action === 'getTabContent') {
+            // Get content from a specific tab
+            chrome.tabs.sendMessage(message.tabId, { action: 'getContent' }, (response) => {
+                if (chrome.runtime.lastError) {
+                    sendResponse({ error: 'Failed to get tab content' });
                 } else {
-                    sendResponse({ error: 'Tab not found' });
+                    sendResponse(response);
                 }
-            } else if (message.action === 'refreshTabs') {
-                // Refresh tabs list
-                chrome.tabs.query({}, (tabsList) => {
-                    tabs = tabsList || [];
-                    console.log('🔍 TabOracle: Tabs refreshed:', tabs.length);
-                    sendResponse({ success: true, tabsCount: tabs.length });
-                });
-                return true; // Keep message channel open
-            } else if (message.action === 'getCategories') {
-                // Return tab categories
-                console.log('🔍 TabOracle: Categorizing tabs:', currentTabs.length);
-                const categories = categorizeTabs(currentTabs);
-                console.log('🔍 TabOracle: Returning categories:', Object.keys(categories).length);
-                sendResponse({ categories: categories });
-            } else if (message.action === 'ping') {
-                // Simple ping to test communication
-                sendResponse({ success: true, message: 'Background script is responding', tabsCount: currentTabs.length });
+            });
+            return true; // Keep message channel open
+        } else if (message.action === 'generateAIExplanation') {
+            handleAIExplanationRequest(message, sender, sendResponse);
+            return true; // Keep message channel open for async response
+        } else if (message.action === 'getTabInfo') {
+            // Get detailed info about a specific tab
+            const tab = currentTabs.find(t => t.id === message.tabId);
+            if (tab) {
+                sendResponse({ tab: tab });
+            } else {
+                sendResponse({ error: 'Tab not found' });
             }
-        } catch (error) {
-            console.error('❌ TabOracle: Error handling message:', error);
-            sendResponse({ error: error.message, tabsCount: currentTabs.length });
+        } else if (message.action === 'refreshTabs') {
+            // Refresh tabs list
+            chrome.tabs.query({}, (tabsList) => {
+                tabs = tabsList || [];
+                console.log('🔍 TabOracle: Tabs refreshed:', tabs.length);
+                sendResponse({ success: true, tabsCount: tabs.length });
+            });
+            return true; // Keep message channel open
+        } else if (message.action === 'getCategories') {
+            // Return tab categories
+            console.log('🔍 TabOracle: Categorizing tabs:', currentTabs.length);
+            const categories = categorizeTabs(currentTabs);
+            console.log('🔍 TabOracle: Returning categories:', Object.keys(categories).length);
+            sendResponse({ categories: categories });
+        } else if (message.action === 'activateTab') {
+            try {
+                const { tabId, windowId } = message;
+                if (typeof windowId === 'number') {
+                    await chrome.windows.update(windowId, { focused: true });
+                }
+                if (typeof tabId === 'number') {
+                    await chrome.tabs.update(tabId, { active: true });
+                }
+                sendResponse({ success: true });
+            } catch (e) {
+                console.error('❌ TabOracle: Failed to activate tab:', e);
+                sendResponse({ success: false, error: e.message });
+            }
+            return true;
+        } else if (message.action === 'ping') {
+            // Simple ping to test communication
+            sendResponse({ success: true, message: 'Background script is responding', tabsCount: currentTabs.length });
+        } else if (message.action === 'getPageContent') {
+            // Get page content for summary generation
+            console.log('🔍 TabOracle: Getting page content for tab:', message.tabId);
+            try {
+                const content = await extractTabContent(message.tabId);
+                if (content) {
+                    sendResponse({ success: true, content: content.content || content });
+                } else {
+                    sendResponse({ success: false, error: 'Failed to extract content' });
+                }
+            } catch (error) {
+                console.error('❌ TabOracle: Error getting page content:', error);
+                sendResponse({ success: false, error: error.message });
+            }
+            return true; // Keep message channel open
+        } else if (message.action === 'extractContent') {
+            // Force extract content from tab
+            console.log('🔍 TabOracle: Extracting content from tab:', message.tabId);
+            try {
+                const content = await extractTabContent(message.tabId);
+                if (content) {
+                    sendResponse({ success: true, content: content.content || content });
+                } else {
+                    sendResponse({ success: false, error: 'Failed to extract content' });
+                }
+            } catch (error) {
+                console.error('❌ TabOracle: Error extracting content:', error);
+                sendResponse({ success: false, error: error.message });
+            }
+            return true; // Keep message channel open
         }
-    }).catch((error) => {
-        console.error('❌ TabOracle: Error ensuring tabs are loaded:', error);
-        sendResponse({ error: 'Failed to load tabs', tabsCount: 0 });
-    });
+    } catch (error) {
+        console.error('❌ TabOracle: Error handling message:', error);
+        sendResponse({ error: error.message, tabsCount: currentTabs ? currentTabs.length : 0 });
+    }
+    })(); // Close the async IIFE
     
     return true; // Keep message channel open for async response
 });
@@ -358,37 +402,60 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // ===== CONTENT EXTRACTION =====
 async function extractTabContent(tabId) {
     try {
-        // Try to get content from content script first
-        const response = await new Promise((resolve, reject) => {
-            chrome.tabs.sendMessage(tabId, { action: 'getContent' }, (response) => {
-                if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
-                } else {
-                    resolve(response);
-                }
-            });
-        });
+        console.log('🔍 TabOracle: Extracting content from tab:', tabId);
         
-        if (response && response.content) {
-            return response.content;
+        // First, try to inject content script if it's not already there
+        try {
+            await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                files: ['content.js']
+            });
+            // Wait a moment for content script to initialize
+            await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (injectError) {
+            console.warn('⚠️ TabOracle: Could not inject content script:', injectError);
         }
         
-        // Fallback: Execute script to get content
+        // Try to get content from content script first
+        try {
+            const response = await new Promise((resolve, reject) => {
+                chrome.tabs.sendMessage(tabId, { action: 'getContent' }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(response);
+                    }
+                });
+            });
+            
+            if (response && response.success && response.content) {
+                console.log('✅ TabOracle: Content extracted via content script');
+                return response.content;
+            }
+        } catch (contentScriptError) {
+            console.warn('⚠️ TabOracle: Content script failed, using fallback:', contentScriptError);
+        }
+        
+        // Fallback: Execute script to get content directly
+        console.log('🔍 TabOracle: Using fallback content extraction...');
         const results = await chrome.scripting.executeScript({
             target: { tabId: tabId },
             func: () => {
                 return {
                     title: document.title,
                     content: document.body.innerText || document.body.textContent || '',
-                    url: window.location.href
+                    url: window.location.href,
+                    timestamp: new Date().toISOString()
                 };
             }
         });
         
         if (results && results[0] && results[0].result) {
+            console.log('✅ TabOracle: Content extracted via fallback method');
             return results[0].result;
         }
         
+        console.warn('⚠️ TabOracle: No content could be extracted');
         return null;
         
     } catch (error) {
@@ -417,7 +484,8 @@ async function processPDFContent(tabId, url) {
 async function processArXivPaper(url) {
     try {
         // Extract ArXiv ID from URL
-        const arxivId = url.match(/arxiv\.org\/(?:abs|pdf)\/(\d+\.\d+)/)?.[1];
+        const match = url.match(/arxiv\.org\/(?:abs|pdf)\/(\d+\.\d+)/);
+        const arxivId = match ? match[1] : null;
         if (!arxivId) return null;
         
         // Get paper metadata and abstract
@@ -486,13 +554,13 @@ async function processPDFFile(tabId) {
                 textLength: response.contentLength
             };
         } else {
-            console.error('❌ TabOracle: PDF text extraction failed:', response?.error);
+            console.error('❌ TabOracle: PDF text extraction failed:', response && response.error);
             return {
                 title: tab.title || 'PDF Document',
                 content: 'PDF content extraction failed',
                 type: 'pdf',
                 url: tab.url,
-                error: response?.error
+                error: response && response.error
             };
         }
         
@@ -653,7 +721,7 @@ async function handleAIExplanationRequest(message, sender, sendResponse) {
                 console.log('🔍 TabOracle: Background script trying Chrome Language Model API...');
                 const languageModel = await chrome.languageModel.create();
                 const response = await languageModel.prompt(prompt);
-                explanation = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                explanation = typeof response === 'string' ? response : ((response && response.text) || (response && response.response) || JSON.stringify(response));
                 aiSource = 'Chrome Language Model API (Background)';
                 console.log('✅ TabOracle: Background script successfully used Chrome Language Model API');
             } catch (error) {
@@ -667,7 +735,7 @@ async function handleAIExplanationRequest(message, sender, sendResponse) {
                 console.log('🔍 TabOracle: Background script trying Global LanguageModel...');
                 const languageModel = await LanguageModel.create();
                 const response = await languageModel.prompt(prompt);
-                explanation = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                explanation = typeof response === 'string' ? response : ((response && response.text) || (response && response.response) || JSON.stringify(response));
                 aiSource = 'Global LanguageModel (Background)';
                 console.log('✅ TabOracle: Background script successfully used Global LanguageModel');
             } catch (error) {
@@ -706,7 +774,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     
     if (info.menuItemId === 'explainMe') {
         try {
-            const rawUrl = info.pageUrl || tab?.url || '';
+            const rawUrl = info.pageUrl || (tab && tab.url) || '';
             console.log('🔍 TabOracle: Explain Me requested. Page URL:', rawUrl);
 
             // Detect Chrome's built-in PDF viewer (mhjfbmdgcfjbbpaeojofohoefgiehjai)
@@ -840,7 +908,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
                                     }
                                 });
                             } else {
-                                console.error('❌ TabOracle: PDF text layer overlay setup failed:', setupResponse?.error);
+                                console.error('❌ TabOracle: PDF text layer overlay setup failed:', setupResponse && setupResponse.error);
                             }
                         });
                     }
@@ -948,29 +1016,7 @@ function categorizeTabs(tabs) {
 // Create context menu when extension loads
 console.log('🔍 TabOracle: Background script loading, creating context menu...');
 
-// Wait for extension to be fully initialized
-chrome.runtime.onStartup.addListener(() => {
-    console.log('🔍 TabOracle: Extension started, creating context menu...');
-    setTimeout(() => {
-        createExplainMeContextMenu().then(() => {
-            console.log('✅ TabOracle: Context menu created on startup');
-        }).catch((error) => {
-            console.error('❌ TabOracle: Failed to create context menu on startup:', error);
-        });
-    }, 1000);
-});
-
-// Also create when extension is installed/updated
-chrome.runtime.onInstalled.addListener(() => {
-    console.log('🔍 TabOracle: Extension installed/updated, creating context menu...');
-    setTimeout(() => {
-        createExplainMeContextMenu().then(() => {
-            console.log('✅ TabOracle: Context menu created on install/update');
-        }).catch((error) => {
-            console.error('❌ TabOracle: Failed to create context menu on install/update:', error);
-        });
-    }, 1000);
-});
+// (Removed duplicate context menu creation paths)
 
 // Single context menu creation function
 function ensureContextMenu() {
@@ -978,19 +1024,30 @@ function ensureContextMenu() {
         console.log('ℹ️ TabOracle: Context menu already created, skipping');
         return;
     }
+    if (contextMenuCreating) {
+        console.log('ℹ️ TabOracle: Context menu creation already in progress, skipping');
+        return;
+    }
     
     console.log('🔍 TabOracle: Creating context menu...');
-    chrome.contextMenus.create({
-        id: 'explainMe',
-        title: 'Explain me TabOracle',
-        contexts: ['selection']
-    }, () => {
-        if (chrome.runtime.lastError) {
-            console.error('❌ TabOracle: Context menu creation failed:', chrome.runtime.lastError);
-        } else {
-            console.log('✅ TabOracle: Context menu created successfully');
-            contextMenuCreated = true;
-        }
+    contextMenuCreating = true;
+    chrome.contextMenus.removeAll(() => {
+        // Create the new menu after clearing any existing items
+        chrome.contextMenus.create({
+            id: 'explainMe',
+            title: 'Explain me TabOracle',
+            contexts: ['selection']
+        }, () => {
+            if (chrome.runtime.lastError) {
+                console.error('❌ TabOracle: Context menu creation failed:', chrome.runtime.lastError);
+                contextMenuCreated = false;
+                contextMenuCreating = false;
+            } else {
+                console.log('✅ TabOracle: Context menu created successfully');
+                contextMenuCreated = true;
+                contextMenuCreating = false;
+            }
+        });
     });
 }
 
@@ -1006,9 +1063,8 @@ chrome.runtime.onInstalled.addListener(() => {
     ensureContextMenu();
 });
 
-// Create context menu immediately
+// Remove immediate creation to avoid races; rely on startup/install hooks
 console.log('🔍 TabOracle: Extension loading');
-ensureContextMenu();
 
 // ===== KEYBOARD SHORTCUTS =====
 chrome.commands.onCommand.addListener((command) => {
@@ -1151,60 +1207,4 @@ setTimeout(debugTabState, 8000);
 
 console.log('✅ TabOracle: Background script loaded successfully with all features');
 
-// ===== NEW SIMPLIFIED CONTEXT MENU CREATION =====
-function createContextMenuSimple() {
-    return new Promise((resolve, reject) => {
-        try {
-            console.log('🔍 TabOracle: Creating context menu (simple method)...');
-            
-            // Check if contextMenus API is available
-            if (!chrome.contextMenus || typeof chrome.contextMenus.create !== 'function') {
-                console.error('❌ TabOracle: contextMenus API not available');
-                reject(new Error('contextMenus API not available'));
-                return;
-            }
-            
-            // First, remove any existing menu to avoid duplicate ID errors
-            chrome.contextMenus.remove('explainMe', () => {
-                // Wait a moment, then create the new menu
-                setTimeout(() => {
-                    const menuOptions = {
-                        id: 'explainMe',
-                        title: 'Explain me TabOracle',
-                        contexts: ['selection']
-                    };
-                    
-                    console.log('🔍 TabOracle: Creating context menu with options:', menuOptions);
-                    
-                    chrome.contextMenus.create(menuOptions, () => {
-                        if (chrome.runtime.lastError) {
-                            const error = chrome.runtime.lastError;
-                            console.error('❌ TabOracle: Failed to create context menu:', {
-                                message: error.message,
-                                error: error
-                            });
-                            reject(new Error(`Failed to create context menu: ${error.message}`));
-                        } else {
-                            console.log('✅ TabOracle: Context menu created successfully');
-                            resolve();
-                        }
-                    });
-                }, 100);
-            });
-            
-        } catch (error) {
-            console.error('❌ TabOracle: Error in createContextMenuSimple:', error);
-            reject(error);
-        }
-    });
-}
-
-// Test the new simple context menu creation
-setTimeout(() => {
-    console.log('🧪 TabOracle: Testing new simple context menu creation...');
-    createContextMenuSimple().then(() => {
-        console.log('✅ TabOracle: New simple context menu creation successful');
-    }).catch((error) => {
-        console.error('❌ TabOracle: New simple context menu creation failed:', error);
-    });
-}, 10000);
+// (Removed experimental simple context menu creation and delayed test)
