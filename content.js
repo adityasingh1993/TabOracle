@@ -281,6 +281,17 @@
                 0%, 100% { transform: scale(1); opacity: 1; }
                 50% { transform: scale(1.05); opacity: 0.8; }
             }
+            
+            @keyframes logoGlow {
+                0%, 100% { 
+                    filter: drop-shadow(0 2px 8px rgba(139, 92, 246, 0.3));
+                    transform: scale(1);
+                }
+                50% { 
+                    filter: drop-shadow(0 4px 16px rgba(139, 92, 246, 0.6));
+                    transform: scale(1.08);
+                }
+            }
         `;
         document.head.appendChild(shimmerCSS);
         
@@ -461,12 +472,21 @@
         `;
         
         const loadingSpinner = document.createElement('div');
-        loadingSpinner.innerHTML = '✨';
+        loadingSpinner.innerHTML = `
+            <img src="${chrome.runtime.getURL('taboracle_icon_only.svg')}" 
+                 alt="TabOracle" 
+                 style="
+                     width: 80px;
+                     height: 80px;
+                     animation: logoGlow 2s infinite;
+                 "
+                 onerror="this.style.display='none'; this.parentElement.innerHTML='✨';">
+        `;
         loadingSpinner.style.cssText = `
-            font-size: 48px;
             margin-bottom: 16px;
-            animation: pulse 2s infinite;
-            filter: drop-shadow(0 2px 8px rgba(139, 92, 246, 0.3));
+            display: flex;
+            justify-content: center;
+            align-items: center;
         `;
         
         const loadingText = document.createElement('div');

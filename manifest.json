@@ -33,7 +33,8 @@
         "pdf-text-layer.js",
         "vendor/pdfjs/pdf.min.js",
         "vendor/pdfjs/pdf.worker.min.js",
-        "taboracle_combined.svg"
+        "taboracle_combined.svg",
+        "taboracle_icon_only.svg"
       ],
       "matches": ["<all_urls>"]
     }

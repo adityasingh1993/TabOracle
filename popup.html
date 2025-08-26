@@ -148,7 +148,16 @@
                 <div class="summary-section">
                     <div class="summary-actions">
                         <button id="generateSummary" class="primary-button">
-                            <span class="button-icon">✨</span>
+                            <span class="button-icon">
+                            <img src="taboracle_icon_only.svg" 
+                                 alt="TabOracle" 
+                                 style="
+                                     width: 24px;
+                                     height: 24px;
+                                     filter: brightness(0) invert(1);
+                                 "
+                                 onerror="this.style.display='none'; this.parentElement.innerHTML='✨';">
+                        </span>
                             <span>Generate Summary</span>
                         </button>
                         <button id="testLanguageModel" class="secondary-button">

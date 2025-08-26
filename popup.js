@@ -306,7 +306,16 @@ class TabOraclePopup {
             this.pageSummaryContent.classList.add('loading');
             this.pageSummaryContent.innerHTML = `
                 <div class="ai-search-loading">
-                    <div class="loading-spinner">✨</div>
+                    <div class="loading-spinner">
+                    <img src="${chrome.runtime.getURL('taboracle_icon_only.svg')}" 
+                         alt="TabOracle" 
+                         style="
+                             width: 80px;
+                             height: 80px;
+                             animation: logoGlow 2s infinite;
+                         "
+                         onerror="this.style.display='none'; this.parentElement.innerHTML='✨';">
+                </div>
                     <div class="loading-text">${this.escapeHtml(message)}</div>
                     <div class="loading-subtext">Please wait while we analyze the page</div>
                 </div>
