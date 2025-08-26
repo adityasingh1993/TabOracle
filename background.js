@@ -39,7 +39,7 @@ let currentTabId = null;
 let contextMenuCreated = false;
 let contextMenuCreating = false;
 // Persist summaries per tab until tab is closed
-const tabSummaries = {}; // { [tabId:number]: summaryData }
+const tabSummaries = {}; // { [tabId:number]: { state: 'in_progress'|'ready'|'error', data?: any, error?: string } }
 
 // Initialize tabs on startup
 function initializeTabs() {
@@ -112,6 +112,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             tabs.push(tab);
         }
         console.log('🔄 TabOracle: Tab updated:', tab.title);
+        
+        // Background categorization for updated tabs
+        if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('about:')) {
+            setTimeout(() => {
+                categorizeTabWithAI(tab).catch(error => {
+                    console.warn('⚠️ TabOracle: Background categorization failed for updated tab:', error);
+                });
+            }, 1000); // Small delay to ensure tab is fully loaded
+        }
     }
 });
 
@@ -130,6 +139,15 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.tabs.onCreated.addListener((tab) => {
     tabs.push(tab);
     console.log('➕ TabOracle: New tab created:', tab.title);
+    
+    // Background categorization for new tabs
+    if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('about:')) {
+        setTimeout(() => {
+            categorizeTabWithAI(tab).catch(error => {
+                console.warn('⚠️ TabOracle: Background categorization failed for new tab:', error);
+            });
+        }, 2000); // Longer delay for new tabs to ensure they're fully loaded
+    }
 });
 
 // Listen for popup opening to ensure tabs are fresh
@@ -343,16 +361,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             return true; // Keep message channel open
         } else if (message.action === 'getCategories') {
-            // Return tab categories
-            console.log('🔍 TabOracle: Categorizing tabs:', currentTabs.length);
-            const categories = categorizeTabs(currentTabs);
-            console.log('🔍 TabOracle: Returning categories:', Object.keys(categories).length);
-            sendResponse({ categories: categories });
+            // Return tab categories (AI-powered with fallback)
+            (async () => {
+                try {
+                    const currentTabs = await ensureTabsLoaded();
+                    console.log('🔍 TabOracle: AI categorizing tabs:', currentTabs.length);
+                    const categories = await categorizeTabs(currentTabs);
+                    console.log('🔍 TabOracle: Returning AI categories:', Object.keys(categories).length);
+                    sendResponse({ categories: categories });
+                } catch (error) {
+                    console.error('❌ TabOracle: AI categorization failed, using fallback:', error);
+                    const currentTabs = await ensureTabsLoaded();
+                    const fallbackCategories = categorizeTabsHeuristic(currentTabs);
+                    sendResponse({ categories: fallbackCategories });
+                }
+            })();
+            return true; // Keep message channel open for async response
         } else if (message.action === 'setTabSummary') {
             try {
                 const { tabId, summary } = message;
                 if (typeof tabId === 'number' && summary) {
-                    tabSummaries[tabId] = summary;
+                    tabSummaries[tabId] = { state: 'ready', data: summary };
                     sendResponse({ success: true });
                 } else {
                     sendResponse({ success: false, error: 'Invalid tabId or summary' });
@@ -365,13 +394,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             try {
                 const { tabId } = message;
                 if (typeof tabId === 'number' && tabSummaries[tabId]) {
-                    sendResponse({ success: true, summary: tabSummaries[tabId] });
+                    const entry = tabSummaries[tabId];
+                    sendResponse({ success: true, state: entry.state, summary: entry.data, error: entry.error });
                 } else {
                     sendResponse({ success: false, error: 'No summary for tab' });
                 }
             } catch (e) {
                 sendResponse({ success: false, error: e.message });
             }
+            return true;
+        } else if (message.action === 'startSummary') {
+            (async () => {
+                try {
+                    const { tabId } = message;
+                    if (typeof tabId !== 'number') {
+                        sendResponse({ success: false, error: 'Invalid tabId' });
+                        return;
+                    }
+                    // Mark in progress
+                    tabSummaries[tabId] = { state: 'in_progress' };
+                    sendResponse({ success: true });
+                    // Run extraction and summarization in background
+                    const extracted = await extractTabContent(tabId);
+                    const contentText = typeof extracted === 'string' ? extracted : (extracted && (extracted.content || extracted.text || ''));
+                    if (!contentText || contentText.length < 20) {
+                        tabSummaries[tabId] = { state: 'error', error: 'Empty content' };
+                        return;
+                    }
+                    const summary = await generateSummary(tabId, contentText);
+                    tabSummaries[tabId] = { state: 'ready', data: summary };
+                } catch (err) {
+                    console.error('❌ TabOracle: startSummary failed:', err);
+                    try { tabSummaries[message.tabId] = { state: 'error', error: String(err && err.message || err) }; } catch (_) {}
+                }
+            })();
             return true;
         } else if (message.action === 'activateTab') {
             try {
@@ -678,35 +734,65 @@ async function processPDFFile(tabId) {
 // ===== SUMMARY GENERATION =====
 async function generateSummary(tabId, content) {
     try {
-        // Try AI summary first
+        // Try AI summary first with structured JSON
         if (typeof chrome !== 'undefined' && chrome.languageModel && chrome.languageModel.create) {
             try {
                 const languageModel = await chrome.languageModel.create();
-                const prompt = `Summarize the following content in 3-5 key points:\n\n${content.substring(0, 2000)}...`;
+                const prompt = `Return ONLY valid JSON. Summarize page with keys: summary, mainTopic, keyPoints, contentType, wordCount, estimatedReadingTime, confidence.\nContent: ${content.substring(0, 8000)}`;
                 const response = await languageModel.prompt(prompt);
-                return {
-                    type: 'ai',
-                    summary: response,
-                    source: 'Chrome Language Model'
-                };
+                const raw = typeof response === 'string' ? response : ((response && response.text) || (response && response.response) || JSON.stringify(response));
+                const parsed = parseAIJsonSafely(raw);
+                if (parsed && parsed.summary) {
+                    return {
+                        type: 'ai',
+                        source: 'Chrome Language Model',
+                        ...parsed
+                    };
+                }
             } catch (error) {
                 console.warn('⚠️ TabOracle: AI summary failed, using fallback:', error);
             }
         }
-        
-        // Fallback: Basic summary
-        const words = content.split(/\s+/).filter(w => w.length > 2);
-        const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
-        
-        let summary = `Content Analysis:\n`;
-        summary += `• Word count: ${words.length}\n`;
-        summary += `• Estimated reading time: ${Math.max(1, Math.ceil(words.length / 200))} minute${words.length > 200 ? 's' : ''}\n`;
-        summary += `• Key topics: ${extractKeyTopics(content)}\n`;
-        
+
+        // Fallback: Basic summary similar to popup
+        const words = (content || '').split(/\s+/).filter(w => w.length > 2);
+        const wordCount = words.length;
+        const minutes = Math.max(1, Math.ceil(wordCount / 225));
+        const sentences = (content || '').split(/[.!?]+/).filter(s => s.trim().length > 10);
+        const firstFewSentences = sentences.slice(0, 3).join('. ').trim();
+        let contentType = 'webpage';
+        const lowerContent = (content || '').toLowerCase();
+        if (lowerContent.includes('research') || lowerContent.includes('study') || lowerContent.includes('paper')) {
+            contentType = 'research';
+        } else if (lowerContent.includes('documentation') || lowerContent.includes('api') || lowerContent.includes('guide')) {
+            contentType = 'documentation';
+        } else if (lowerContent.includes('news') || lowerContent.includes('article')) {
+            contentType = 'article';
+        } else if (lowerContent.includes('tutorial') || lowerContent.includes('how to')) {
+            contentType = 'tutorial';
+        }
+        const keyPoints = [];
+        const importantWords = ['important', 'key', 'main', 'primary', 'essential', 'critical'];
+        for (let i = 0; i < Math.min(5, sentences.length); i++) {
+            const sentence = sentences[i];
+            if (importantWords.some(word => sentence.toLowerCase().includes(word))) {
+                keyPoints.push(sentence.trim());
+            }
+        }
+        if (keyPoints.length === 0 && sentences.length > 0) {
+            keyPoints.push(...sentences.slice(0, 3).map(s => s.trim()));
+        }
+        const summary = firstFewSentences || `This page contains ${wordCount} words. Estimated reading time: ${minutes} minute${minutes !== 1 ? 's' : ''}.`;
         return {
             type: 'basic',
-            summary: summary,
-            source: 'Text Analysis'
+            source: 'Text Analysis',
+            summary,
+            mainTopic: 'This page',
+            keyPoints: keyPoints.slice(0, 5),
+            contentType,
+            wordCount,
+            estimatedReadingTime: `${minutes} minute${minutes !== 1 ? 's' : ''}`,
+            confidence: 0.7
         };
         
     } catch (error) {
@@ -716,6 +802,21 @@ async function generateSummary(tabId, content) {
             summary: 'Failed to generate summary',
             source: 'Error'
         };
+    }
+}
+
+function parseAIJsonSafely(text) {
+    if (!text) return null;
+    try {
+        const match = String(text).match(/\{[\s\S]*\}/);
+        if (match) {
+            try { return JSON.parse(match[0]); } catch (_e) {}
+            const cleaned = match[0].replace(/[^\x20-\x7E]/g, '').replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+            return JSON.parse(cleaned);
+        }
+        return JSON.parse(String(text));
+    } catch (_e) {
+        return null;
     }
 }
 
@@ -961,15 +1062,94 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
                 if (chrome.runtime.lastError) {
                     console.error('❌ TabOracle: Failed to send message to content script:', chrome.runtime.lastError);
                     
-                    // Fallback: Show alert with selected text
-                    chrome.scripting.executeScript({
-                        target: { tabId: validTab.id },
-                        func: (text) => {
-                            alert(`Explain Me Feature\n\nSelected Text: ${text.substring(0, 200)}...\n\nNote: Content script communication failed. Please refresh the page and try again.`);
-                        },
-                        args: [info.selectionText]
-                    });
+                    // Check if this is a restricted page error
+                    const errorMessage = chrome.runtime.lastError.message;
+                    if (errorMessage && errorMessage.includes('chrome://')) {
+                        console.warn('⚠️ TabOracle: Explain Me not available on restricted page');
+                        
+                        // Show user-friendly error message
+                        chrome.scripting.executeScript({
+                            target: { tabId: validTab.id },
+                            func: () => {
+                                const notification = document.createElement('div');
+                                notification.style.cssText = `
+                                    position: fixed;
+                                    top: 20px;
+                                    left: 50%;
+                                    transform: translateX(-50%);
+                                    background: #dc2626;
+                                    color: white;
+                                    padding: 15px 20px;
+                                    border-radius: 8px;
+                                    font-family: Arial, sans-serif;
+                                    font-size: 14px;
+                                    z-index: 10001;
+                                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                                    max-width: 400px;
+                                    text-align: center;
+                                `;
+                                notification.innerHTML = `
+                                    <div style="font-weight: bold; margin-bottom: 8px;">⚠️ Explain Me Not Available</div>
+                                    <div>This feature is not available on browser settings pages, extensions, or other restricted pages.</div>
+                                    <div style="margin-top: 8px; font-size: 12px;">Try selecting text on a regular webpage instead.</div>
+                                `;
+                                document.body.appendChild(notification);
+                                
+                                setTimeout(() => {
+                                    notification.remove();
+                                }, 6000);
+                            }
+                        });
+                    } else {
+                        // Fallback: Show alert with selected text for other errors
+                        chrome.scripting.executeScript({
+                            target: { tabId: validTab.id },
+                            func: (text) => {
+                                alert(`Explain Me Feature\n\nSelected Text: ${text.substring(0, 200)}...\n\nNote: Content script communication failed. Please refresh the page and try again.`);
+                            },
+                            args: [info.selectionText]
+                        });
+                    }
                 } else {
+                    // Check if content script returned a restricted page error
+                    if (response && response.isRestrictedPage) {
+                        console.warn('⚠️ TabOracle: Explain Me not available on restricted page');
+                        
+                        // Show user-friendly error message
+                        chrome.scripting.executeScript({
+                            target: { tabId: validTab.id },
+                            func: () => {
+                                const notification = document.createElement('div');
+                                notification.style.cssText = `
+                                    position: fixed;
+                                    top: 20px;
+                                    left: 50%;
+                                    transform: translateX(-50%);
+                                    background: #dc2626;
+                                    color: white;
+                                    padding: 15px 20px;
+                                    border-radius: 8px;
+                                    font-family: Arial, sans-serif;
+                                    font-size: 14px;
+                                    z-index: 10001;
+                                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                                    max-width: 400px;
+                                    text-align: center;
+                                `;
+                                notification.innerHTML = `
+                                    <div style="font-weight: bold; margin-bottom: 8px;">⚠️ Explain Me Not Available</div>
+                                    <div>This feature is not available on browser settings pages, extensions, or other restricted pages.</div>
+                                    <div style="margin-top: 8px; font-size: 12px;">Try selecting text on a regular webpage instead.</div>
+                                `;
+                                document.body.appendChild(notification);
+                                
+                                setTimeout(() => {
+                                    notification.remove();
+                                }, 6000);
+                            }
+                        });
+                        return;
+                    }
                     console.log('✅ TabOracle: Message sent to content script successfully');
                     
                     // Check if this is a PDF page and PDF overlay setup is needed
@@ -1051,20 +1231,33 @@ async function testContentScript(tabId) {
 }
 
 // ===== TAB CATEGORIZATION =====
-function categorizeTabs(tabs) {
+
+// AI-powered categorization cache
+const categoryCache = new Map();
+const categoryCacheTTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+const maxConcurrentCategorizations = 3;
+let activeCategorizations = 0;
+
+// Available categories for AI classification
+const AI_CATEGORIES = [
+    '💻 Development',
+    '👥 Social', 
+    '📰 News',
+    '🛒 Shopping',
+    '⚡ Productivity',
+    '🎥 Media',
+    '📚 Documentation',
+    '🔍 Search',
+    '💰 Finance',
+    '🏥 Health',
+    '🏷️ Other'
+];
+
+// Fallback heuristic categorization (original implementation)
+function categorizeTabsHeuristic(tabs) {
     try {
-        const categories = {
-            '💻 Development': [],
-            '👥 Social': [],
-            '📰 News': [],
-            '🛒 Shopping': [],
-            '⚡ Productivity': [],
-            '🎥 Media': [],
-            '🔧 Programming': [],
-            '📚 Documentation': [],
-            '🔍 Search': [],
-            '🏷️ Other': []
-        };
+        const categories = {};
+        AI_CATEGORIES.forEach(cat => categories[cat] = []);
         
         tabs.forEach(tab => {
             const url = tab.url.toLowerCase();
@@ -1101,7 +1294,6 @@ function categorizeTabs(tabs) {
         // Keep all categories but mark empty ones
         Object.keys(categories).forEach(key => {
             if (categories[key].length === 0) {
-                // Keep empty categories but mark them as empty
                 categories[key] = [];
                 console.log(`🏷️ TabOracle: Category "${key}" has 0 tabs but will be kept for UI`);
             } else {
@@ -1112,8 +1304,242 @@ function categorizeTabs(tabs) {
         return categories;
         
     } catch (error) {
-        console.error('❌ TabOracle: Error categorizing tabs:', error);
+        console.error('❌ TabOracle: Error in heuristic categorization:', error);
         return { '🏷️ Other': [] };
+    }
+}
+
+// AI-powered categorization for a single tab
+async function categorizeTabWithAI(tab) {
+    try {
+        // Skip internal URLs and extensions
+        if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || 
+            tab.url.startsWith('about:') || tab.url.startsWith('chrome-extension://') ||
+            tab.url === 'about:blank') {
+            return '🏷️ Other';
+        }
+
+        // Check cache first
+        const cacheKey = new URL(tab.url).hostname;
+        const cached = categoryCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp) < categoryCacheTTL) {
+            console.log(`🏷️ TabOracle: Using cached category for ${cacheKey}: ${cached.category}`);
+            return cached.category;
+        }
+
+        // Rate limiting
+        if (activeCategorizations >= maxConcurrentCategorizations) {
+            console.log(`🏷️ TabOracle: Rate limit reached, using fallback for ${tab.url}`);
+            return categorizeTabHeuristic(tab);
+        }
+
+        activeCategorizations++;
+        console.log(`🏷️ TabOracle: AI categorizing ${tab.url}`);
+
+        try {
+            // Initialize language model
+            console.log('🏷️ TabOracle: Initializing language model for categorization...');
+            const model = await chrome.languageModel.create();
+            if (!model) {
+                throw new Error('Language model not available');
+            }
+            console.log('🏷️ TabOracle: Language model initialized successfully');
+
+            // Prepare prompt
+            const hostname = new URL(tab.url).hostname;
+            const pathname = new URL(tab.url).pathname;
+            const prompt = `You are a tab categorizer. From the given URL, host, and title, return a SINGLE category from this exact list:
+${AI_CATEGORIES.map(cat => `"${cat}"`).join(',')}.
+
+IMPORTANT RULES:
+- Email services (Gmail, Outlook, Yahoo Mail, etc.) should be "⚡ Productivity"
+- Shopping sites (Amazon, Flipkart, eBay, etc.) should be "🛒 Shopping"
+- Social media (Facebook, Twitter, Instagram, etc.) should be "👥 Social"
+- Search engines (Google Search, Bing, etc.) should be "🔍 Search"
+- Development sites (GitHub, Stack Overflow, etc.) should be "💻 Development"
+
+Return strict JSON: {"category":"<one-of-list>","confidence":0.0-1.0,"reason":"<brief>"}.
+
+URL: ${tab.url}
+Host: ${hostname}
+Path: ${pathname}
+Title: ${tab.title || 'No title'}`;
+
+            // Get AI response with timeout
+            console.log('🏷️ TabOracle: Sending prompt to AI model...');
+            const response = await Promise.race([
+                model.prompt(prompt),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('AI timeout')), 2000))
+            ]);
+
+            const raw = typeof response === 'string' ? response : (response && (response.text || response.response) || JSON.stringify(response));
+            console.log('🏷️ TabOracle: AI response received:', raw.substring(0, 200) + '...');
+            
+            // Parse JSON response
+            const match = String(raw).match(/\{[\s\S]*\}/);
+            if (match) {
+                const parsed = JSON.parse(match[0]);
+                if (parsed.category && AI_CATEGORIES.includes(parsed.category)) {
+                    // Cache the result
+                    categoryCache.set(cacheKey, {
+                        category: parsed.category,
+                        confidence: parsed.confidence || 0.5,
+                        reason: parsed.reason || '',
+                        timestamp: Date.now()
+                    });
+                    
+                    console.log(`🏷️ TabOracle: AI categorized ${hostname} as ${parsed.category} (confidence: ${parsed.confidence})`);
+                    return parsed.category;
+                }
+            }
+            
+            throw new Error('Invalid AI response format');
+            
+        } catch (error) {
+            console.warn(`⚠️ TabOracle: AI categorization failed for ${tab.url}:`, error.message);
+            return categorizeTabHeuristic(tab);
+        } finally {
+            activeCategorizations--;
+        }
+        
+    } catch (error) {
+        console.error(`❌ TabOracle: Error in AI categorization for ${tab.url}:`, error);
+        return categorizeTabHeuristic(tab);
+    }
+}
+
+// Heuristic categorization for a single tab (fallback)
+function categorizeTabHeuristic(tab) {
+    const url = tab.url.toLowerCase();
+    const title = tab.title.toLowerCase();
+    
+    // Email services
+    if (url.includes('gmail.com') || url.includes('outlook.com') || url.includes('yahoo.com/mail') || 
+        url.includes('mail.yahoo.com') || url.includes('protonmail.com') || url.includes('icloud.com/mail') ||
+        url.includes('mail.google.com') || url.includes('outlook.live.com') || url.includes('hotmail.com') ||
+        title.includes('mail') || title.includes('email') || title.includes('inbox')) {
+        return '⚡ Productivity';
+    }
+    
+    // Social media
+    if (url.includes('facebook.com') || url.includes('twitter.com') || url.includes('instagram.com') || 
+        url.includes('linkedin.com') || url.includes('youtube.com') || url.includes('tiktok.com') ||
+        url.includes('snapchat.com') || url.includes('pinterest.com') || url.includes('reddit.com')) {
+        return '👥 Social';
+    }
+    
+    // Shopping sites
+    if (url.includes('amazon.com') || url.includes('ebay.com') || url.includes('etsy.com') || 
+        url.includes('flipkart.com') || url.includes('myntra.com') || url.includes('snapdeal.com') ||
+        url.includes('shop') || url.includes('store') || url.includes('buy') || url.includes('cart') ||
+        url.includes('walmart.com') || url.includes('target.com') || url.includes('bestbuy.com')) {
+        return '🛒 Shopping';
+    }
+    
+    // News sites
+    if (url.includes('news') || url.includes('bbc') || url.includes('cnn') || 
+        url.includes('reuters') || url.includes('nytimes') || url.includes('washingtonpost') ||
+        url.includes('theguardian') || url.includes('huffpost') || url.includes('forbes.com')) {
+        return '📰 News';
+    }
+    
+    // Productivity tools
+    if (url.includes('google.com/docs') || url.includes('notion.so') || url.includes('trello.com') ||
+        url.includes('asana.com') || url.includes('slack.com') || url.includes('zoom.us') ||
+        url.includes('teams.microsoft.com') || url.includes('discord.com') || url.includes('figma.com')) {
+        return '⚡ Productivity';
+    }
+    
+    // Media/Entertainment
+    if (url.includes('netflix.com') || url.includes('spotify.com') || url.includes('twitch.tv') || 
+        url.includes('game') || url.includes('movie') || url.includes('music') || url.includes('youtube.com') ||
+        url.includes('disneyplus.com') || url.includes('hulu.com') || url.includes('primevideo.com')) {
+        return '🎥 Media';
+    }
+    
+    // Development/Programming
+    if (url.includes('github.com') || url.includes('stackoverflow.com') || url.includes('dev.to') || 
+        url.includes('tech') || url.includes('programming') || url.includes('code') ||
+        url.includes('gitlab.com') || url.includes('bitbucket.org') || url.includes('npmjs.com')) {
+        return '💻 Development';
+    }
+    
+    // Documentation/Learning
+    if (url.includes('edu') || url.includes('course') || url.includes('learn') || 
+        url.includes('tutorial') || url.includes('documentation') || url.includes('wiki') ||
+        url.includes('udemy.com') || url.includes('coursera.org') || url.includes('khanacademy.org')) {
+        return '📚 Documentation';
+    }
+    
+    // Search engines (but not email)
+    if ((url.includes('google.com') && !url.includes('mail.google.com') && !url.includes('gmail.com')) || 
+        url.includes('bing.com') || url.includes('duckduckgo.com') || url.includes('yahoo.com')) {
+        return '🔍 Search';
+    }
+    
+    // Finance
+    if (url.includes('bank') || url.includes('paypal.com') || url.includes('stripe.com') ||
+        url.includes('finance') || url.includes('investing') || url.includes('robinhood.com') ||
+        url.includes('coinbase.com') || url.includes('binance.com')) {
+        return '💰 Finance';
+    }
+    
+    // Health
+    if (url.includes('health') || url.includes('medical') || url.includes('doctor') ||
+        url.includes('webmd.com') || url.includes('mayoclinic.org') || url.includes('healthline.com')) {
+        return '🏥 Health';
+    }
+    
+    return '🏷️ Other';
+}
+
+// Main categorization function (AI-powered with fallback)
+async function categorizeTabs(tabs) {
+    try {
+        console.log(`🏷️ TabOracle: Starting AI-powered categorization for ${tabs.length} tabs`);
+        
+        const categories = {};
+        AI_CATEGORIES.forEach(cat => categories[cat] = []);
+        
+        // Process tabs in batches to avoid overwhelming the AI
+        const batchSize = 5;
+        for (let i = 0; i < tabs.length; i += batchSize) {
+            const batch = tabs.slice(i, i + batchSize);
+            const promises = batch.map(async (tab) => {
+                const category = await categorizeTabWithAI(tab);
+                return { tab, category };
+            });
+            
+            const results = await Promise.all(promises);
+            results.forEach(({ tab, category }) => {
+                if (categories[category]) {
+                    categories[category].push(tab);
+                } else {
+                    categories['🏷️ Other'].push(tab);
+                }
+            });
+            
+            // Small delay between batches
+            if (i + batchSize < tabs.length) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        
+        // Log results
+        Object.keys(categories).forEach(key => {
+            if (categories[key].length === 0) {
+                categories[key] = [];
+                console.log(`🏷️ TabOracle: Category "${key}" has 0 tabs but will be kept for UI`);
+            } else {
+                console.log(`🏷️ TabOracle: Category "${key}" has ${categories[key].length} tabs`);
+            }
+        });
+        
+        return categories;
+        
+    } catch (error) {
+        console.error('❌ TabOracle: Error in AI categorization, falling back to heuristic:', error);
+        return categorizeTabsHeuristic(tabs);
     }
 }
 

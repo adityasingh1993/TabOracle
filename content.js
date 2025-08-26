@@ -89,6 +89,7 @@
     let explainMeLoading = null;
     let explainPinned = false;
     let currentExplainRequestId = 0; // prevent stale results overwriting newer ones
+    let lastProcessedRequestId = 0; // track the last request that was actually processed
 
     function createExplainMeOverlay() {
         try {
@@ -345,30 +346,37 @@
         function setExplainPinned(pinned) {
             explainPinned = pinned;
             if (pinned) {
-                // Dock overlay panel to right and remove dim backdrop
+                // Make overlay draggable and position it as a floating panel
                 explainMeOverlay.style.background = 'transparent';
-                explainMeOverlay.style.alignItems = 'stretch';
+                explainMeOverlay.style.alignItems = 'flex-start';
                 explainMeOverlay.style.justifyContent = 'flex-end';
                 contentContainer.style.position = 'fixed';
-                contentContainer.style.top = '0';
-                contentContainer.style.right = '0';
-                contentContainer.style.height = '100vh';
+                contentContainer.style.top = '20px';
+                contentContainer.style.right = '20px';
+                contentContainer.style.height = 'calc(100vh - 40px)';
                 contentContainer.style.width = '360px';
                 contentContainer.style.maxWidth = '360px';
-                contentContainer.style.borderRadius = '0';
-                contentContainer.style.boxShadow = '0 0 20px rgba(0,0,0,0.12)';
+                contentContainer.style.borderRadius = '12px';
+                contentContainer.style.boxShadow = '0 8px 32px rgba(0,0,0,0.15), 0 4px 16px rgba(139, 92, 246, 0.1)';
+                contentContainer.style.cursor = 'move';
+                contentContainer.style.userSelect = 'none';
+                
+                // Add draggable functionality
+                makeDraggable(contentContainer);
+                
                 // Condense header
                 header.style.height = '40px';
                 header.style.padding = '8px 12px';
                 header.style.boxShadow = 'none';
                 header.style.background = '#6d28d9';
-                // Show compact logo in pinned mode
+                header.style.borderRadius = '12px 12px 0 0';
+                // Show larger logo in pinned mode for better brand visibility
                 tabOracleLogo.style.display = 'block';
-                tabOracleLogo.style.width = '90px';
-                tabOracleLogo.style.height = '30px';
+                tabOracleLogo.style.width = '120px';
+                tabOracleLogo.style.height = '40px';
                 // Tighten center header
                 centerHeader.style.gap = '8px';
-                title.style.fontSize = '16px';
+                title.style.fontSize = '18px';
                 // Reduce content padding
                 contentWrapper.style.padding = '16px';
                 // Adjust scroll area height for pinned header
@@ -386,15 +394,23 @@
                 contentContainer.style.maxWidth = '90vw';
                 contentContainer.style.borderRadius = '20px';
                 contentContainer.style.boxShadow = '0 20px 40px rgba(139, 92, 246, 0.3), 0 8px 32px rgba(0, 0, 0, 0.2)';
+                contentContainer.style.cursor = 'default';
+                contentContainer.style.userSelect = 'auto';
+                contentContainer.style.transform = 'none';
+                
+                // Remove draggable functionality
+                removeDraggable(contentContainer);
+                
                 // Restore header
                 header.style.height = '44px';
                 header.style.padding = '12px 20px';
                 header.style.boxShadow = '0 8px 32px rgba(139, 92, 246, 0.4), 0 4px 16px rgba(0, 0, 0, 0.15)';
                 header.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%)';
-                // Restore logo size in unpinned mode
+                header.style.borderRadius = '20px 20px 0 0';
+                // Show larger logo in unpinned mode for better brand visibility
                 tabOracleLogo.style.display = 'block';
-                tabOracleLogo.style.width = '120px';
-                tabOracleLogo.style.height = '40px';
+                tabOracleLogo.style.width = '140px';
+                tabOracleLogo.style.height = '47px';
                 centerHeader.style.gap = '12px';
                 title.style.fontSize = '18px';
                 contentWrapper.style.padding = '32px';
@@ -482,14 +498,18 @@
             flex: 1 1 auto;
             min-height: 0;
             overflow-y: auto;
-            line-height: 1.6;
+            line-height: 1.7;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 15px;
+            color: #374151;
+            padding: 0;
+            margin: 0;
         `;
         
         // Create content wrapper for proper padding
         const contentWrapper = document.createElement('div');
         contentWrapper.style.cssText = `
-            padding: 32px;
+            padding: 24px;
             padding-top: 0;
             display: flex;
             flex-direction: column;
@@ -534,10 +554,13 @@
                 createExplainMeOverlay();
             }
             
-            // Show overlay
+            // Show overlay and clear any previous content
             if (explainMeOverlay) {
                 explainMeOverlay.style.display = 'flex';
                 console.log('✅ TabOracle: Explain Me overlay displayed');
+                
+                // Reset explain me state completely
+                resetExplainMeState();
                 
                 // Start AI explanation
                 generateExplanation(selectedText);
@@ -556,6 +579,103 @@
             explainMeOverlay.style.display = 'none';
             console.log('🔍 TabOracle: Explain Me overlay hidden');
         }
+        // Reset state when hiding
+        lastProcessedRequestId = 0;
+    }
+    
+    // Make an element draggable
+    function makeDraggable(element) {
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+
+        function dragStart(e) {
+            if (e.type === "touchstart") {
+                initialX = e.touches[0].clientX - xOffset;
+                initialY = e.touches[0].clientY - yOffset;
+            } else {
+                initialX = e.clientX - xOffset;
+                initialY = e.clientY - yOffset;
+            }
+
+            if (e.target === element || element.contains(e.target)) {
+                isDragging = true;
+            }
+        }
+
+        function dragEnd(e) {
+            initialX = currentX;
+            initialY = currentY;
+            isDragging = false;
+        }
+
+        function drag(e) {
+            if (isDragging) {
+                e.preventDefault();
+                
+                if (e.type === "touchmove") {
+                    currentX = e.touches[0].clientX - initialX;
+                    currentY = e.touches[0].clientY - initialY;
+                } else {
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+                }
+
+                xOffset = currentX;
+                yOffset = currentY;
+
+                // Allow dragging anywhere on screen (no viewport constraints)
+                setTranslate(currentX, currentY, element);
+            }
+        }
+
+        function setTranslate(xPos, yPos, el) {
+            el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
+        }
+
+        // Mouse events
+        element.addEventListener("mousedown", dragStart);
+        document.addEventListener("mousemove", drag);
+        document.addEventListener("mouseup", dragEnd);
+
+        // Touch events for mobile
+        element.addEventListener("touchstart", dragStart, { passive: false });
+        document.addEventListener("touchmove", drag, { passive: false });
+        document.addEventListener("touchend", dragEnd);
+
+        // Prevent text selection while dragging
+        element.addEventListener("selectstart", (e) => e.preventDefault());
+    }
+    
+    // Remove draggable functionality from an element
+    function removeDraggable(element) {
+        // Remove all event listeners by cloning and replacing the element
+        const newElement = element.cloneNode(true);
+        element.parentNode.replaceChild(newElement, element);
+        
+        // Restore the content and styling
+        newElement.innerHTML = element.innerHTML;
+        newElement.className = element.className;
+        newElement.id = element.id;
+        
+        return newElement;
+    }
+    
+    function resetExplainMeState() {
+        // Reset all explain me state variables
+        lastProcessedRequestId = 0;
+        if (explainMeContent) {
+            explainMeContent.innerHTML = '';
+            explainMeContent.style.display = 'none';
+        }
+        if (explainMeLoading) {
+            explainMeLoading.style.display = 'none';
+        }
+        console.log('🔄 TabOracle: Explain Me state reset');
     }
 
     async function generateExplanation(selectedText) {
@@ -571,41 +691,52 @@
             // Track this request to avoid race conditions
             const requestId = ++currentExplainRequestId;
 
-            // Show loading state
+            // Show loading state and clear previous content
             if (explainMeLoading) {
                 explainMeLoading.style.display = 'block';
             }
             if (explainMeContent) {
                 explainMeContent.style.display = 'none';
                 explainMeContent.innerHTML = '';
+                // Force a longer delay to ensure content is cleared and DOM is updated
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            // Double-check that we're still the current request
+            if (requestId !== currentExplainRequestId) {
+                console.log('ℹ️ TabOracle: Request superseded during clearing, aborting');
+                return;
             }
             
             // Create enhanced prompt for explanation
             const prompt = `You are an expert educator and explainer. Your task is to explain the following text in a clear, comprehensive, and engaging way.
 
-Please provide an explanation that includes:
-1. **Simple Summary**: A brief overview in simple terms
-2. **Key Concepts**: Break down the main ideas and concepts
-3. **Context**: Provide background information if relevant
-4. **Examples**: Give practical examples or analogies when helpful
-5. **Why It Matters**: Explain the significance or importance
+Please provide an explanation with these EXACT section headers:
+
+Summary
+A brief overview in simple terms
+
+Key Concepts
+Break down the main ideas and concepts
+
+Context
+Provide background information if relevant
+
+Examples
+Give practical examples or analogies when helpful
+
+Why It Matters
+Explain the significance or importance
 
 Text to explain:
 "${selectedText}"
 
-IMPORTANT: Please respond with clean, formatted text only. Do not include:
-- Code blocks or markdown formatting
-- Role prefixes like "AI:", "Assistant:", etc.
-- Special characters or formatting artifacts
-- HTML tags or technical markup
-
-Use simple formatting like:
-- Bold text with **asterisks**
-- Italic text with *asterisks*
-- Bullet points with •
-- Clear headings with ##
-
-Keep the response clean and readable.`;
+IMPORTANT: 
+- Use the EXACT section headers: Summary, Key Concepts, Context, Examples, Why It Matters
+- Write each section header on its own line (no bullet points for headers)
+- Provide clear spacing between sections
+- Keep the response clean and readable
+- Do not include role prefixes or technical markup`;
 
             // Try multiple AI approaches (same as popup.js)
             let explanation = null;
@@ -724,8 +855,10 @@ Keep the response clean and readable.`;
                 }
             }
             
-            // Only display if this is the latest request
-            if (requestId === currentExplainRequestId) {
+            // Only display if this is the latest request and we haven't processed it yet
+            if (requestId === currentExplainRequestId && requestId > lastProcessedRequestId) {
+                console.log('✅ TabOracle: Displaying fresh explanation result (requestId:', requestId, ')');
+                lastProcessedRequestId = requestId;
                 // Display explanation with AI status
                 if (typeof displayExplanation === 'function') {
                     displayExplanation(explanation, aiSource);
@@ -733,7 +866,7 @@ Keep the response clean and readable.`;
                     console.error('❌ TabOracle: displayExplanation function not available');
                 }
             } else {
-                console.log('ℹ️ TabOracle: Stale explain result ignored');
+                console.log('ℹ️ TabOracle: Stale explain result ignored (requestId:', requestId, 'current:', currentExplainRequestId, 'lastProcessed:', lastProcessedRequestId, ')');
             }
             
         } catch (error) {
@@ -854,8 +987,17 @@ Keep the response clean and readable.`;
             displayContent += formattedExplanation;
             // Disclaimer for AI generated explanations
             displayContent += `
-                <div style="margin-top: 10px; font-size: 11px; color: #6b7280;">
-                    ⚠️ AI Generated content may be inaccurate. Verify important information.
+                <div style="
+                    margin-top: 16px; 
+                    padding: 12px 16px;
+                    background: rgba(139, 92, 246, 0.05);
+                    border: 1px solid rgba(139, 92, 246, 0.15);
+                    border-radius: 8px;
+                    font-size: 12px; 
+                    color: #6b7280;
+                    font-style: italic;
+                ">
+                    ⚠️ AI Generated content may be inaccurate. Please verify important information.
                 </div>
             `;
             
@@ -865,14 +1007,13 @@ Keep the response clean and readable.`;
 
     function formatExplanation(text) {
         if (!text || typeof text !== 'string') {
-            return '<p style="color: #ef4444; font-style: italic;">No explanation available.</p>';
+            return '<div style="color: #ef4444; font-style: italic; text-align: center; padding: 20px;">No explanation available.</div>';
         }
 
         // Clean the text first - remove any garbage characters and normalize
         let cleanedText = text
             // Remove common AI response artifacts
             .replace(/```[\s\S]*?```/g, '') // Remove code blocks
-            .replace(/`([^`]+)`/g, '<code style="background: rgba(139, 92, 246, 0.1); padding: 2px 6px; border-radius: 4px; color: #6d28d9; font-family: monospace;">$1</code>') // Convert inline code
             .replace(/^\s*AI:\s*/gi, '') // Remove AI prefixes
             .replace(/^\s*Assistant:\s*/gi, '') // Remove Assistant prefixes
             .replace(/^\s*User:\s*/gi, '') // Remove User prefixes
@@ -883,19 +1024,51 @@ Keep the response clean and readable.`;
             .replace(/\n\s*[A-Za-z]+:\s*/gi, '\n') // Remove role prefixes in middle of text
             .replace(/^\s*[-*]\s*/gm, '• ') // Convert markdown list markers to bullet points
             .replace(/^\s*\d+\.\s*/gm, '') // Remove numbered list markers
-            .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1f2937; font-weight: 600;">$1</strong>') // Bold text
-            .replace(/\*(.*?)\*/g, '<em style="color: #4b5563; font-style: italic;">$1</em>') // Italic text
-            .replace(/^##\s*(.*?)$/gm, '<h3 style="color: #1f2937; margin: 25px 0 15px 0; font-size: 20px; font-weight: 600; border-bottom: 2px solid rgba(139, 92, 246, 0.2); padding-bottom: 8px;">$1</h3>') // H3 headings
-            .replace(/^#\s*(.*?)$/gm, '<h2 style="color: #1f2937; margin: 30px 0 20px 0; font-size: 24px; font-weight: 700;">$1</h2>') // H2 headings
-            .replace(/\n\s*\n/g, '</p><p style="margin: 15px 0; line-height: 1.6; color: #374151;">') // Paragraph breaks
-            .replace(/\n•\s*/g, '</p><p style="margin: 8px 0; line-height: 1.6; color: #374151;">• ') // Bullet points
-            .replace(/\n(\d+\.)\s*/g, '</p><p style="margin: 8px 0; line-height: 1.6; color: #374151;">$1 ') // Numbered points
             .replace(/^\s*•\s*/gm, '• ') // Ensure bullet points start properly
             .replace(/^\s*(\d+\.)\s*/gm, '$1 ') // Ensure numbered points start properly
             .trim(); // Remove leading/trailing whitespace
 
-        // Wrap in paragraph tags
-        cleanedText = '<p style="margin: 15px 0; line-height: 1.6; color: #374151;">' + cleanedText + '</p>';
+        // Apply enhanced formatting in separate steps to avoid syntax errors
+        // Enhanced inline code
+        cleanedText = cleanedText.replace(/`([^`]+)`/g, '<code style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.08)); padding: 3px 8px; border-radius: 6px; color: #6d28d9; font-family: monospace; font-size: 13px; border: 1px solid rgba(139, 92, 246, 0.2); font-weight: 500;">$1</code>');
+        
+        // Enhanced bold text
+        cleanedText = cleanedText.replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1f2937; font-weight: 700; background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(139, 92, 246, 0.08)); padding: 3px 8px; border-radius: 6px; border-left: 4px solid #8b5cf6; box-shadow: 0 2px 4px rgba(139, 92, 246, 0.1);">$1</strong>');
+        
+        // Enhanced italic text
+        cleanedText = cleanedText.replace(/\*(.*?)\*/g, '<em style="color: #4b5563; font-style: italic; font-weight: 500;">$1</em>');
+        
+        // Enhanced key phrases and concepts
+        cleanedText = cleanedText.replace(/\b(key concept|main point|important|crucial|essential|critical|primary|fundamental|core|central|key|main|major|significant)\b/gi, '<strong style="color: #1f2937; font-weight: 700; background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.08)); padding: 4px 10px; border-radius: 8px; border-left: 4px solid #8b5cf6; box-shadow: 0 3px 6px rgba(139, 92, 246, 0.15); display: inline-block; margin: 2px 0;">$1</strong>');
+        
+        // Enhanced section headers (Summary, Key Concepts, Examples, Context, Why It Matters)
+        // Target section headers that are on their own line (without bullet points)
+        cleanedText = cleanedText.replace(/^Summary$/gm, '<div style="margin: 32px 0 16px 0; padding: 12px 16px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.08)); border-radius: 12px; border-left: 5px solid #8b5cf6; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);"><strong style="color: #1f2937; font-weight: 800; font-size: 18px; text-transform: uppercase; letter-spacing: 1px;">Summary</strong></div>');
+        cleanedText = cleanedText.replace(/^Key Concepts$/gm, '<div style="margin: 32px 0 16px 0; padding: 12px 16px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.08)); border-radius: 12px; border-left: 5px solid #8b5cf6; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);"><strong style="color: #1f2937; font-weight: 800; font-size: 18px; text-transform: uppercase; letter-spacing: 1px;">Key Concepts</strong></div>');
+        cleanedText = cleanedText.replace(/^Context$/gm, '<div style="margin: 32px 0 16px 0; padding: 12px 16px; background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.08)); border-radius: 12px; border-left: 5px solid #3b82f6; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);"><strong style="color: #1f2937; font-weight: 800; font-size: 18px; text-transform: uppercase; letter-spacing: 1px;">Context</strong></div>');
+        cleanedText = cleanedText.replace(/^Examples$/gm, '<div style="margin: 32px 0 16px 0; padding: 12px 16px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.08)); border-radius: 12px; border-left: 5px solid #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);"><strong style="color: #1f2937; font-weight: 800; font-size: 18px; text-transform: uppercase; letter-spacing: 1px;">Examples</strong></div>');
+        cleanedText = cleanedText.replace(/^Why It Matters$/gm, '<div style="margin: 32px 0 16px 0; padding: 12px 16px; background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.08)); border-radius: 12px; border-left: 5px solid #f59e0b; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);"><strong style="color: #1f2937; font-weight: 800; font-size: 18px; text-transform: uppercase; letter-spacing: 1px;">Why It Matters</strong></div>');
+        
+        // Enhanced technical terms
+        cleanedText = cleanedText.replace(/\b(definition|concept|principle|theory|method|technique|approach|strategy|framework|model|system|process|function|algorithm|protocol|standard|specification)\b/gi, '<strong style="color: #1f2937; font-weight: 600; background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(59, 130, 246, 0.08)); padding: 3px 8px; border-radius: 6px; border-left: 4px solid #3b82f6; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);">$1</strong>');
+        
+        // Enhanced H3 headings
+        cleanedText = cleanedText.replace(/^##\s*(.*?)$/gm, '<h3 style="color: #1f2937; margin: 32px 0 16px 0; font-size: 20px; font-weight: 700; border-bottom: 3px solid rgba(139, 92, 246, 0.25); padding-bottom: 12px; position: relative;"><span style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">$1</span></h3>');
+        
+        // Enhanced H2 headings
+        cleanedText = cleanedText.replace(/^#\s*(.*?)$/gm, '<h2 style="color: #1f2937; margin: 40px 0 20px 0; font-size: 24px; font-weight: 800; position: relative; padding-left: 16px;"><span style="background: linear-gradient(135deg, #8b5cf6, #6d28d9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">$1</span><div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 4px; height: 24px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border-radius: 2px;"></div></h2>');
+        
+        // Enhanced paragraph breaks
+        cleanedText = cleanedText.replace(/\n\s*\n/g, '</p><p style="margin: 24px 0; line-height: 1.8; color: #374151; font-size: 16px; font-weight: 400; letter-spacing: 0.01em;">');
+        
+        // Enhanced bullet points
+        cleanedText = cleanedText.replace(/\n•\s*/g, '</p><p style="margin: 16px 0; line-height: 1.7; color: #374151; font-size: 15px; padding-left: 20px; border-left: 4px solid rgba(139, 92, 246, 0.4); background: rgba(139, 92, 246, 0.02); border-radius: 0 8px 8px 0; padding: 12px 16px 12px 20px; position: relative;"><span style="color: #8b5cf6; font-weight: 600; margin-right: 8px;">•</span>');
+        
+        // Enhanced numbered points
+        cleanedText = cleanedText.replace(/\n(\d+\.)\s*/g, '</p><p style="margin: 16px 0; line-height: 1.7; color: #374151; font-size: 15px; padding-left: 20px; border-left: 4px solid rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.02); border-radius: 0 8px 8px 0; padding: 12px 16px 12px 20px; position: relative;"><span style="color: #3b82f6; font-weight: 600; margin-right: 8px;">$1</span>');
+
+        // Wrap in paragraph tags with enhanced styling
+        cleanedText = '<p style="margin: 24px 0; line-height: 1.8; color: #374151; font-size: 16px; font-weight: 400; letter-spacing: 0.01em;">' + cleanedText + '</p>';
 
         // Clean up any empty paragraphs
         cleanedText = cleanedText
@@ -903,22 +1076,114 @@ Keep the response clean and readable.`;
             .replace(/<p[^>]*>\s*•\s*<\/p>/g, '') // Remove empty bullet points
             .replace(/<p[^>]*>\s*\d+\.\s*<\/p>/g, ''); // Remove empty numbered points
 
-        // Add container styling
+        // Enhanced container styling with better visual appeal
         return `
             <div style="
-                background: rgba(255, 255, 255, 0.95);
+                background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.98));
                 backdrop-filter: blur(20px);
                 border: 1px solid rgba(139, 92, 246, 0.15);
                 border-radius: 16px;
-                padding: 25px;
-                box-shadow: 0 4px 12px rgba(139, 92, 246, 0.08);
+                padding: 32px;
+                box-shadow: 
+                    0 10px 40px rgba(139, 92, 246, 0.12),
+                    0 4px 16px rgba(0, 0, 0, 0.08),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.8);
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                max-width: 100%;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+                position: relative;
             ">
+                <!-- Decorative gradient border -->
+                <div style="
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    height: 3px;
+                    background: linear-gradient(135deg, #8b5cf6, #7c3aed, #6d28d9);
+                    border-radius: 16px 16px 0 0;
+                "></div>
+                
+                <!-- Transparent TabOracle logo watermark -->
+                <div style="
+                    position: absolute;
+                    bottom: 20px;
+                    right: 20px;
+                    opacity: 0.25;
+                    pointer-events: none;
+                    z-index: 10;
+                    background: rgba(255, 255, 255, 0.2);
+                    padding: 10px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(139, 92, 246, 0.1);
+                ">
+                    <img src="${chrome.runtime.getURL('taboracle_combined.svg')}" 
+                         alt="TabOracle" 
+                         style="
+                             width: 80px;
+                             height: 27px;
+                             filter: grayscale(100%) brightness(0.5);
+                             display: block;
+                         "
+                         onerror="
+                             console.error('Watermark image failed to load, showing text fallback');
+                             this.style.display='none';
+                             this.nextElementSibling.style.display='block';
+                         "
+                         onload="console.log('Watermark image loaded successfully');">
+                    <!-- Text fallback watermark -->
+                    <div style="
+                        display: none;
+                        font-family: 'Inter', sans-serif;
+                        font-size: 12px;
+                        font-weight: 600;
+                        color: rgba(139, 92, 246, 0.6);
+                        text-align: center;
+                        letter-spacing: 0.5px;
+                        text-transform: uppercase;
+                    ">TabOracle</div>
+                </div>
+                
                 ${cleanedText}
             </div>
         `;
     }
 
+    function cleanAIResponse(text) {
+        if (!text || typeof text !== 'string') {
+            return 'No explanation available.';
+        }
+
+        // Remove common AI response artifacts and clean the text
+        let cleanedText = text
+            .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+            .replace(/`([^`]+)`/g, '$1') // Remove inline code markers
+            .replace(/^\s*AI:\s*/gi, '') // Remove AI prefixes
+            .replace(/^\s*Assistant:\s*/gi, '') // Remove Assistant prefixes
+            .replace(/^\s*User:\s*/gi, '') // Remove User prefixes
+            .replace(/^\s*Human:\s*/gi, '') // Remove Human prefixes
+            .replace(/^\s*Bot:\s*/gi, '') // Remove Bot prefixes
+            .replace(/^\s*System:\s*/gi, '') // Remove System prefixes
+            .replace(/^\s*[A-Za-z]+:\s*/gi, '') // Remove any other role prefixes
+            .replace(/\n\s*[A-Za-z]+:\s*/gi, '\n') // Remove role prefixes in middle of text
+            .replace(/^\s*[-*]\s*/gm, '• ') // Convert markdown list markers to bullet points
+            .replace(/^\s*\d+\.\s*/gm, '') // Remove numbered list markers
+            .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markers
+            .replace(/\*(.*?)\*/g, '$1') // Remove italic markers
+            .replace(/^##\s*(.*?)$/gm, '$1') // Remove H3 markers
+            .replace(/^#\s*(.*?)$/gm, '$1') // Remove H2 markers
+            .replace(/\n\s*\n/g, '\n\n') // Normalize paragraph breaks
+            .replace(/\n•\s*/g, '\n• ') // Ensure bullet points are properly formatted
+            .replace(/\n(\d+\.)\s*/g, '\n$1 ') // Ensure numbered points are properly formatted
+            .replace(/^\s*•\s*/gm, '• ') // Ensure bullet points start properly
+            .replace(/^\s*(\d+\.)\s*/gm, '$1 ') // Ensure numbered points start properly
+            .replace(/[^\w\s•\-\.,!?;:()]/g, '') // Remove any other special characters
+            .trim(); // Remove leading/trailing whitespace
+
+        return cleanedText;
+    }
+    
     // Message listener for Explain Me feature
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('🔍 TabOracle: Message received:', message);
@@ -929,6 +1194,27 @@ Keep the response clean and readable.`;
         if (message.action === 'showExplainMe') {
             try {
                 console.log('🔍 TabOracle: Processing Explain Me request...');
+                
+                // Check if we're on a restricted page (chrome://, about:, etc.)
+                const currentUrl = window.location.href;
+                const isRestrictedPage = currentUrl.startsWith('chrome://') || 
+                                       currentUrl.startsWith('about:') || 
+                                       currentUrl.startsWith('chrome-extension://') ||
+                                       currentUrl.startsWith('moz-extension://') ||
+                                       currentUrl.startsWith('edge://') ||
+                                       currentUrl.startsWith('brave://');
+                
+                if (isRestrictedPage) {
+                    console.warn('⚠️ TabOracle: Explain Me not available on restricted page:', currentUrl);
+                    sendResponse({ 
+                        success: false, 
+                        error: 'Explain Me is not available on this type of page (browser settings, extensions, etc.)',
+                        isRestrictedPage: true,
+                        suggestion: 'Try selecting text on a regular webpage'
+                    });
+                    return;
+                }
+                
                 console.log('🔍 TabOracle: Message selectedText:', message.selectedText);
                 console.log('🔍 TabOracle: Message selectedText type:', typeof message.selectedText);
                 console.log('🔍 TabOracle: Message selectedText length:', message.selectedText ? message.selectedText.length : 'undefined');
@@ -1489,40 +1775,6 @@ Keep the response clean and readable.`;
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
-    function cleanAIResponse(text) {
-        if (!text || typeof text !== 'string') {
-            return 'No explanation available.';
-        }
-
-        // Remove common AI response artifacts and clean the text
-        let cleanedText = text
-            .replace(/```[\s\S]*?```/g, '') // Remove code blocks
-            .replace(/`([^`]+)`/g, '$1') // Remove inline code markers
-            .replace(/^\s*AI:\s*/gi, '') // Remove AI prefixes
-            .replace(/^\s*Assistant:\s*/gi, '') // Remove Assistant prefixes
-            .replace(/^\s*User:\s*/gi, '') // Remove User prefixes
-            .replace(/^\s*Human:\s*/gi, '') // Remove Human prefixes
-            .replace(/^\s*Bot:\s*/gi, '') // Remove Bot prefixes
-            .replace(/^\s*System:\s*/gi, '') // Remove System prefixes
-            .replace(/^\s*[A-Za-z]+:\s*/gi, '') // Remove any other role prefixes
-            .replace(/\n\s*[A-Za-z]+:\s*/gi, '\n') // Remove role prefixes in middle of text
-            .replace(/^\s*[-*]\s*/gm, '• ') // Convert markdown list markers to bullet points
-            .replace(/^\s*\d+\.\s*/gm, '') // Remove numbered list markers
-            .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markers
-            .replace(/\*(.*?)\*/g, '$1') // Remove italic markers
-            .replace(/^##\s*(.*?)$/gm, '$1') // Remove H3 markers
-            .replace(/^#\s*(.*?)$/gm, '$1') // Remove H2 markers
-            .replace(/\n\s*\n/g, '\n\n') // Normalize paragraph breaks
-            .replace(/\n•\s*/g, '\n• ') // Ensure bullet points are properly formatted
-            .replace(/\n(\d+\.)\s*/g, '\n$1 ') // Ensure numbered points are properly formatted
-            .replace(/^\s*•\s*/gm, '• ') // Ensure bullet points start properly
-            .replace(/^\s*(\d+\.)\s*/gm, '$1 ') // Ensure numbered points start properly
-            .replace(/[^\w\s•\-\.,!?;:()]/g, '') // Remove any other special characters
-            .trim(); // Remove leading/trailing whitespace
-
-        return cleanedText;
-    }
-    
     // Listen for messages from background script
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'showSearch') {

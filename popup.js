@@ -51,6 +51,23 @@ class TabOraclePopup {
         // Set default tab and load initial content
         this.currentTab = 'normalSearchTab';
         this.switchTab('normalSearchTab');
+
+        // If a persisted summary exists for the active tab, show it immediately
+        (async () => {
+            try {
+                const activeTab = await new Promise((resolve) => {
+                    try { chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs && tabs[0])); } catch (_e) { resolve(null); }
+                });
+                if (activeTab && activeTab.id) {
+                    const resp = await chrome.runtime.sendMessage({ action: 'getTabSummary', tabId: activeTab.id });
+                    if (resp && resp.success && resp.summary) {
+                        // Switch to summary tab and render without requiring another click
+                        this.switchTab('pageSummaryTab');
+                        this.renderSummary(resp.summary);
+                    }
+                }
+            } catch (_e) {}
+        })();
         
         // Debug: Check if tabs were loaded
         console.log('🔍 TabOracle: After switchTab, checking state...');
@@ -372,47 +389,51 @@ class TabOraclePopup {
                 return;
             }
 
-            // Get page content via background (handles chrome:// restrictions and caching)
-            let contentResp = await chrome.runtime.sendMessage({ action: 'getPageContent', tabId: activeTab.id });
-            if (!contentResp || !contentResp.success) {
-                // Fallback: request background to extract then retry
-                try {
-                    await chrome.runtime.sendMessage({ action: 'extractContent', tabId: activeTab.id });
-                    contentResp = await chrome.runtime.sendMessage({ action: 'getPageContent', tabId: activeTab.id });
-                } catch (_e) {}
-            }
-            if (!contentResp || !contentResp.success) {
+            // First, try summarizing with popup AI model (same environment as Test AI)
+            let popupSummary = null;
+            try {
+                // Get page content via background
+                let contentResp = await chrome.runtime.sendMessage({ action: 'getPageContent', tabId: activeTab.id });
+                if (!contentResp || !contentResp.success) {
+                    // Fallback: request background to extract then retry
+                    try {
+                        await chrome.runtime.sendMessage({ action: 'extractContent', tabId: activeTab.id });
+                        contentResp = await chrome.runtime.sendMessage({ action: 'getPageContent', tabId: activeTab.id });
+                    } catch (_e) {}
+                }
+                if (contentResp && contentResp.success) {
+                    const pageContent = contentResp.content || '';
+                    const pageTitle = activeTab.title || '';
+                    const pageUrl = activeTab.url || '';
+                    await this.ensureLanguageModelInitialized();
+                    if (this.languageModel && this.languageModel.prompt) {
+                        const prompt = `Return ONLY valid JSON. Summarize page with keys: summary, mainTopic, keyPoints, contentType, wordCount, estimatedReadingTime, confidence.\nTitle: ${pageTitle}\nURL: ${pageUrl}\nContent: ${pageContent.substring(0, 8000)}`;
+                        const response = await this.languageModel.prompt(prompt);
+                        const raw = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                        popupSummary = this.parseAIJsonSafely(raw);
+                    }
+                    if (!popupSummary) {
+                        popupSummary = this.basicFallbackSummary(pageContent, pageTitle);
+                    }
+                }
+            } catch (_e) {}
+
+            if (popupSummary) {
+                try { await chrome.runtime.sendMessage({ action: 'setTabSummary', tabId: activeTab.id, summary: popupSummary }); } catch (_e) {}
                 this.setSummaryLoading(false);
-                this.pageSummaryContent.innerHTML = `<div class="empty-state error">${this.escapeHtml(contentResp?.error || 'Unable to get page content')}</div>`;
+                this.renderSummary(popupSummary);
                 return;
             }
 
-            const pageContent = contentResp.content || '';
-            const pageTitle = activeTab.title || '';
-            const pageUrl = activeTab.url || '';
-
-            // Try on-device model first
-            await this.ensureLanguageModelInitialized();
-            let summaryData = null;
-            if (this.languageModel && this.languageModel.prompt) {
-                const prompt = `Return ONLY valid JSON. Summarize page with keys: summary, mainTopic, keyPoints, contentType, wordCount, estimatedReadingTime, confidence.\nTitle: ${pageTitle}\nURL: ${pageUrl}\nContent: ${pageContent.substring(0, 8000)}`;
-                const response = await this.languageModel.prompt(prompt);
-                const raw = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
-                summaryData = this.parseAIJsonSafely(raw);
+            // If popup AI path didn't produce a summary, start background job and show background message immediately
+            try { 
+                await chrome.runtime.sendMessage({ action: 'startSummary', tabId: activeTab.id }); 
+                this.setSummaryLoading(true, 'Generating in background... You can close this and return later.');
+            } catch (_e) {
+                this.setSummaryLoading(false);
+                this.pageSummaryContent.innerHTML = `<div class="empty-state error">Failed to start background generation.</div>`;
+                return;
             }
-
-            // Fallback if AI not available or parsing failed
-            if (!summaryData) {
-                summaryData = this.basicFallbackSummary(pageContent, pageTitle);
-            }
-
-            // Persist summary in background so it survives popup closes
-            try {
-                await chrome.runtime.sendMessage({ action: 'setTabSummary', tabId: activeTab.id, summary: summaryData });
-            } catch (_e) {}
-
-            this.setSummaryLoading(false);
-            this.renderSummary(summaryData);
         } catch (error) {
             console.error('❌ TabOracle: Generate summary failed:', error);
             this.setSummaryLoading(false);
@@ -776,8 +797,26 @@ class TabOraclePopup {
                     });
                     if (activeTab && activeTab.id) {
                         const resp = await chrome.runtime.sendMessage({ action: 'getTabSummary', tabId: activeTab.id });
-                        if (resp && resp.success && resp.summary) {
-                            this.renderSummary(resp.summary);
+                        if (resp && resp.success) {
+                            if (resp.state === 'ready' && resp.summary) {
+                                this.renderSummary(resp.summary);
+                            } else if (resp.state === 'in_progress') {
+                                this.setSummaryLoading(true, 'Generating in background...');
+                                // Light polling to update when it finishes while user is on this tab
+                                const start = Date.now();
+                                const tick = async () => {
+                                    if (Date.now() - start > 15000) return; // stop after 15s
+                                    let r = null;
+                                    try { r = await chrome.runtime.sendMessage({ action: 'getTabSummary', tabId: activeTab.id }); } catch (_e) {}
+                                    if (r && r.success && r.state === 'ready' && r.summary) {
+                                        this.setSummaryLoading(false);
+                                        this.renderSummary(r.summary);
+                                        return;
+                                    }
+                                    setTimeout(tick, 800);
+                                };
+                                setTimeout(tick, 800);
+                            }
                         }
                     }
                 } catch (_e) {}
