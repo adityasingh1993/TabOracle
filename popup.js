@@ -584,6 +584,21 @@ class TabOraclePopup {
         // Smart search
         if (this.smartSearchInput) {
             this.smartSearchInput.addEventListener('input', (e) => this.handleSmartSearch(e.target.value));
+            this.smartSearchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.performAISearch(e.target.value);
+                }
+            });
+        }
+        
+        // AI Search button
+        if (this.aiSearchButton) {
+            this.aiSearchButton.addEventListener('click', () => {
+                const query = this.aiSearchInput?.value || this.smartSearchInput?.value;
+                if (query) {
+                    this.performAISearch(query);
+                }
+            });
         }
         
         // Category selection
@@ -1649,6 +1664,515 @@ class TabOraclePopup {
     clearSmartSearch() {
         this.smartSearchInput.value = '';
         this.smartSearchResults.style.display = 'none';
+    }
+
+    async performAISearch(query) {
+        console.log('🧠 TabOracle: Performing AI search for:', query);
+        
+        if (!query.trim()) {
+            this.showAISearchResults([]);
+            return;
+        }
+        
+        // Show loading state
+        this.setAISearchLoading(true, 'Analyzing tabs with AI...');
+        
+        try {
+            // Get all tabs with content
+            const tabsWithContent = await this.getTabsWithContent();
+            
+            // Use AI to analyze and rank tabs
+            const aiResults = await this.analyzeTabsWithAI(query, tabsWithContent);
+            
+            // Display results
+            this.showAISearchResults(aiResults);
+            
+        } catch (error) {
+            console.error('❌ TabOracle: AI search failed:', error);
+            this.showAISearchError('AI search failed. Please try again.');
+        } finally {
+            this.setAISearchLoading(false);
+        }
+    }
+
+    async getTabsWithContent() {
+        const tabsWithContent = [];
+        
+        for (const tab of this.allTabs) {
+            try {
+                // Get tab content from background script
+                const response = await chrome.runtime.sendMessage({
+                    action: 'getPageContent',
+                    tabId: tab.id
+                });
+                
+                if (response && response.success && response.content) {
+                    tabsWithContent.push({
+                        ...tab,
+                        content: response.content
+                    });
+                } else {
+                    // Fallback to just title and URL
+                    tabsWithContent.push(tab);
+                }
+            } catch (error) {
+                console.warn('⚠️ TabOracle: Failed to get content for tab:', tab.id, error);
+                tabsWithContent.push(tab);
+            }
+        }
+        
+        return tabsWithContent;
+    }
+
+    async analyzeTabsWithAI(query, tabsWithContent) {
+        console.log('🧠 TabOracle: Analyzing', tabsWithContent.length, 'tabs with AI');
+        
+        // If language model is available, use it
+        if (this.languageModel && this.languageModelInitialized) {
+            return await this.analyzeWithLanguageModel(query, tabsWithContent);
+        } else {
+            // Fallback to intelligent keyword analysis
+            return this.analyzeWithKeywords(query, tabsWithContent);
+        }
+    }
+
+    async analyzeWithLanguageModel(query, tabsWithContent) {
+        try {
+            const prompt = `
+                You are a semantic search assistant. Analyze the following tabs for semantic relevance to the query: "${query}"
+                
+                Consider semantic relationships, not just exact keyword matches:
+                - Synonyms and related concepts (e.g., "code" relates to "programming", "development", "software")
+                - Contextual understanding (e.g., "bank" in financial context vs. river context)
+                - Conceptual relationships (e.g., "social" relates to "facebook", "twitter", "communication")
+                - Domain-specific terminology and jargon
+                
+                For each relevant tab, provide:
+                1. Semantic relevance score (0-100) based on conceptual similarity
+                2. Detailed explanation of semantic connections and why it's relevant
+                3. Key semantic concepts and relationships identified
+                4. Confidence level in the semantic match
+                
+                Tabs to analyze:
+                ${tabsWithContent.map((tab, index) => `
+                ${index + 1}. Title: ${tab.title}
+                   URL: ${tab.url}
+                   Content: ${tab.content ? tab.content.substring(0, 800) + '...' : 'No content available'}
+                `).join('\n')}
+                
+                Focus on semantic understanding and conceptual relationships. Return results as JSON array:
+                [{
+                    "index": 0, 
+                    "score": 85, 
+                    "explanation": "Semantically relevant because...", 
+                    "concepts": ["concept1", "concept2"],
+                    "confidence": 0.9,
+                    "semantic_relationships": ["relationship1", "relationship2"]
+                }]
+                
+                Only include tabs with semantic relevance score > 30.
+            `;
+            
+            const response = await this.languageModel.prompt(prompt);
+            
+            if (response && response.text) {
+                try {
+                    const results = JSON.parse(response.text);
+                    return this.processAIResults(results, tabsWithContent);
+                } catch (parseError) {
+                    console.warn('⚠️ TabOracle: Failed to parse AI response, using fallback');
+                    return this.analyzeWithKeywords(query, tabsWithContent);
+                }
+            } else {
+                return this.analyzeWithKeywords(query, tabsWithContent);
+            }
+            
+        } catch (error) {
+            console.warn('⚠️ TabOracle: Language model analysis failed, using fallback:', error);
+            return this.analyzeWithKeywords(query, tabsWithContent);
+        }
+    }
+
+    analyzeWithKeywords(query, tabsWithContent) {
+        console.log('🧠 TabOracle: Using enhanced semantic analysis for AI search');
+        
+        // Enhanced semantic understanding with concept mapping
+        const semanticQuery = this.enhanceQueryWithSemantics(query);
+        const results = [];
+        
+        for (let i = 0; i < tabsWithContent.length; i++) {
+            const tab = tabsWithContent[i];
+            const title = tab.title.toLowerCase();
+            const url = tab.url.toLowerCase();
+            const content = (tab.content || '').toLowerCase();
+            
+            // Calculate semantic similarity scores
+            const semanticScores = this.calculateSemanticSimilarity(semanticQuery, {
+                title: title,
+                url: url,
+                content: content
+            });
+            
+            if (semanticScores.totalScore > 0) {
+                results.push({
+                    tab: tab,
+                    score: semanticScores.totalScore,
+                    explanation: semanticScores.explanation,
+                    concepts: semanticScores.concepts,
+                    matchedWords: semanticScores.matchedWords,
+                    semanticMatches: semanticScores.semanticMatches
+                });
+            }
+        }
+        
+        // Sort by score (highest first)
+        results.sort((a, b) => b.score - a.score);
+        
+        return results;
+    }
+
+    enhanceQueryWithSemantics(query) {
+        const queryLower = query.toLowerCase();
+        
+        // Semantic concept mapping
+        const conceptMap = {
+            // Programming/Development
+            'code': ['programming', 'development', 'software', 'coding', 'script', 'function', 'class', 'api', 'sdk'],
+            'programming': ['code', 'development', 'software', 'coding', 'script', 'function', 'class', 'api', 'sdk'],
+            'development': ['code', 'programming', 'software', 'coding', 'script', 'function', 'class', 'api', 'sdk'],
+            
+            // Web/Internet
+            'web': ['internet', 'website', 'online', 'browser', 'chrome', 'firefox', 'safari'],
+            'website': ['web', 'site', 'page', 'online', 'internet', 'browser'],
+            'online': ['web', 'internet', 'website', 'browser', 'digital'],
+            
+            // Social Media
+            'social': ['facebook', 'twitter', 'instagram', 'linkedin', 'youtube', 'tiktok', 'social media'],
+            'facebook': ['social', 'social media', 'fb', 'meta'],
+            'twitter': ['social', 'social media', 'tweet', 'x'],
+            
+            // Shopping/E-commerce
+            'shop': ['buy', 'purchase', 'shopping', 'amazon', 'ebay', 'store', 'marketplace'],
+            'buy': ['shop', 'purchase', 'shopping', 'amazon', 'ebay', 'store'],
+            'amazon': ['shop', 'buy', 'purchase', 'shopping', 'store', 'marketplace'],
+            
+            // News/Information
+            'news': ['article', 'information', 'report', 'story', 'update', 'latest'],
+            'article': ['news', 'information', 'report', 'story', 'content'],
+            'information': ['news', 'article', 'report', 'data', 'details'],
+            
+            // Work/Productivity
+            'work': ['job', 'career', 'professional', 'business', 'office', 'workplace'],
+            'job': ['work', 'career', 'employment', 'professional', 'business'],
+            'business': ['work', 'job', 'career', 'professional', 'company', 'enterprise'],
+            
+            // Entertainment
+            'video': ['youtube', 'netflix', 'streaming', 'movie', 'film', 'entertainment'],
+            'music': ['spotify', 'apple music', 'audio', 'song', 'playlist', 'entertainment'],
+            'game': ['gaming', 'play', 'entertainment', 'fun', 'video game'],
+            
+            // Education/Learning
+            'learn': ['education', 'study', 'course', 'tutorial', 'training', 'knowledge'],
+            'study': ['learn', 'education', 'course', 'tutorial', 'training'],
+            'course': ['learn', 'study', 'education', 'tutorial', 'training', 'class'],
+            
+            // Communication
+            'email': ['gmail', 'outlook', 'mail', 'message', 'communication'],
+            'chat': ['message', 'communication', 'discord', 'slack', 'teams'],
+            'message': ['email', 'chat', 'communication', 'gmail', 'outlook'],
+            
+            // Finance/Money
+            'bank': ['finance', 'money', 'account', 'financial', 'banking'],
+            'money': ['finance', 'bank', 'financial', 'account', 'payment'],
+            'finance': ['bank', 'money', 'financial', 'account', 'investment'],
+            
+            // Travel
+            'travel': ['trip', 'vacation', 'booking', 'hotel', 'flight', 'tourism'],
+            'trip': ['travel', 'vacation', 'booking', 'hotel', 'flight'],
+            'booking': ['travel', 'trip', 'hotel', 'flight', 'reservation'],
+            
+            // Health/Fitness
+            'health': ['medical', 'fitness', 'exercise', 'wellness', 'doctor'],
+            'fitness': ['health', 'exercise', 'workout', 'gym', 'wellness'],
+            'exercise': ['health', 'fitness', 'workout', 'gym', 'training']
+        };
+        
+        // Extract base words from query
+        const baseWords = queryLower.split(/\s+/).filter(word => word.length > 2);
+        const enhancedWords = [...baseWords];
+        const semanticConcepts = [];
+        
+        // Add semantic concepts for each base word
+        baseWords.forEach(word => {
+            if (conceptMap[word]) {
+                enhancedWords.push(...conceptMap[word]);
+                semanticConcepts.push({
+                    original: word,
+                    concepts: conceptMap[word]
+                });
+            }
+        });
+        
+        // Add common synonyms and related terms
+        const synonyms = this.getSynonyms(queryLower);
+        enhancedWords.push(...synonyms);
+        
+        return {
+            original: query,
+            enhanced: enhancedWords,
+            concepts: semanticConcepts,
+            synonyms: synonyms
+        };
+    }
+
+    getSynonyms(word) {
+        const synonymMap = {
+            'code': ['programming', 'scripting', 'coding'],
+            'web': ['internet', 'online', 'digital'],
+            'social': ['community', 'network', 'connection'],
+            'shop': ['buy', 'purchase', 'store'],
+            'news': ['information', 'update', 'report'],
+            'work': ['job', 'career', 'business'],
+            'video': ['movie', 'film', 'media'],
+            'music': ['audio', 'song', 'sound'],
+            'game': ['play', 'gaming', 'entertainment'],
+            'learn': ['study', 'education', 'training'],
+            'email': ['mail', 'message', 'communication'],
+            'chat': ['message', 'talk', 'conversation'],
+            'bank': ['finance', 'money', 'financial'],
+            'travel': ['trip', 'journey', 'vacation'],
+            'health': ['medical', 'fitness', 'wellness']
+        };
+        
+        return synonymMap[word] || [];
+    }
+
+    calculateSemanticSimilarity(semanticQuery, tabData) {
+        let totalScore = 0;
+        const matchedWords = [];
+        const concepts = [];
+        const semanticMatches = [];
+        
+        // Calculate scores for each enhanced word
+        semanticQuery.enhanced.forEach(word => {
+            const wordScore = this.calculateWordScore(word, tabData);
+            if (wordScore.score > 0) {
+                totalScore += wordScore.score;
+                if (!matchedWords.includes(word)) {
+                    matchedWords.push(word);
+                }
+                concepts.push(wordScore.concept);
+                semanticMatches.push({
+                    word: word,
+                    score: wordScore.score,
+                    type: wordScore.type,
+                    context: wordScore.context
+                });
+            }
+        });
+        
+        // Bonus for semantic concept matches
+        semanticQuery.concepts.forEach(concept => {
+            const conceptMatches = concept.concepts.filter(c => 
+                tabData.title.includes(c) || 
+                tabData.url.includes(c) || 
+                tabData.content.includes(c)
+            );
+            if (conceptMatches.length > 0) {
+                totalScore += conceptMatches.length * 15; // Bonus for semantic concept matches
+                concepts.push(`Semantic concept: ${concept.original} → ${conceptMatches.join(', ')}`);
+            }
+        });
+        
+        // Bonus for exact phrase matches
+        if (tabData.title.includes(semanticQuery.original.toLowerCase())) {
+            totalScore += 50;
+            concepts.push('Exact title match');
+        }
+        
+        // Normalize score to 0-100 range
+        totalScore = Math.min(100, Math.max(0, totalScore));
+        
+        return {
+            totalScore: totalScore,
+            explanation: this.generateSemanticExplanation(semanticQuery, matchedWords, concepts),
+            concepts: concepts,
+            matchedWords: matchedWords,
+            semanticMatches: semanticMatches
+        };
+    }
+
+    calculateWordScore(word, tabData) {
+        let score = 0;
+        let type = '';
+        let context = '';
+        let concept = '';
+        
+        // Title relevance (highest weight)
+        if (tabData.title.includes(word)) {
+            score += 35;
+            type = 'title';
+            context = 'title';
+            concept = `Title contains "${word}"`;
+        }
+        
+        // URL relevance
+        if (tabData.url.includes(word)) {
+            score += 25;
+            if (type !== 'title') {
+                type = 'url';
+                context = 'url';
+                concept = `URL contains "${word}"`;
+            }
+        }
+        
+        // Content relevance
+        if (tabData.content.includes(word)) {
+            score += 15;
+            if (type !== 'title' && type !== 'url') {
+                type = 'content';
+                context = 'content';
+                concept = `Content contains "${word}"`;
+            }
+        }
+        
+        // Domain relevance
+        try {
+            const domain = new URL(tabData.url).hostname.toLowerCase();
+            if (domain.includes(word)) {
+                score += 20;
+                if (type !== 'title' && type !== 'url' && type !== 'content') {
+                    type = 'domain';
+                    context = 'domain';
+                    concept = `Domain contains "${word}"`;
+                }
+            }
+        } catch (e) {
+            // Invalid URL, skip domain check
+        }
+        
+        return { score, type, context, concept };
+    }
+
+    generateSemanticExplanation(semanticQuery, matchedWords, concepts) {
+        const originalWords = semanticQuery.original.split(/\s+/);
+        const semanticMatches = matchedWords.filter(word => 
+            !originalWords.includes(word) && semanticQuery.enhanced.includes(word)
+        );
+        
+        let explanation = `Matched ${matchedWords.length} terms`;
+        
+        if (semanticMatches.length > 0) {
+            explanation += ` (including semantic matches: ${semanticMatches.slice(0, 3).join(', ')}${semanticMatches.length > 3 ? '...' : ''})`;
+        }
+        
+        if (concepts.length > 0) {
+            explanation += `. Key concepts: ${concepts.slice(0, 3).join(', ')}${concepts.length > 3 ? '...' : ''}`;
+        }
+        
+        return explanation;
+    }
+
+    processAIResults(aiResults, tabsWithContent) {
+        return aiResults.map(result => {
+            const tab = tabsWithContent[result.index];
+            return {
+                tab: tab,
+                score: result.score || 0,
+                explanation: result.explanation || 'AI analysis',
+                concepts: result.concepts || []
+            };
+        }).filter(result => result.score > 0);
+    }
+
+    setAISearchLoading(isLoading, message = 'Analyzing with AI...') {
+        const aiResults = document.getElementById('smartSearchResults');
+        if (!aiResults) return;
+        
+        if (isLoading) {
+            aiResults.style.display = 'block';
+            aiResults.innerHTML = `
+                <div class="ai-search-loading">
+                    <div class="loading-spinner">🧠</div>
+                    <div class="loading-text">${this.escapeHtml(message)}</div>
+                    <div class="loading-subtext">Analyzing tab content and relevance...</div>
+                </div>
+            `;
+        }
+    }
+
+    showAISearchResults(results) {
+        const aiResults = document.getElementById('smartSearchResults');
+        if (!aiResults) return;
+        
+        aiResults.style.display = 'block';
+        
+        if (results.length === 0) {
+            aiResults.innerHTML = `
+                <div class="no-results">
+                    <div class="no-results-icon">🔍</div>
+                    <div class="no-results-text">No relevant tabs found</div>
+                    <div class="no-results-subtext">Try different keywords or check your query</div>
+                </div>
+            `;
+            return;
+        }
+        
+        const resultsHtml = results.map((result, index) => {
+            const tab = result.tab;
+            const scoreColor = result.score >= 80 ? '#4CAF50' : result.score >= 60 ? '#FF9800' : '#2196F3';
+            
+            return `
+                <div class="ai-result-item" data-tab-id="${tab.id}" data-window-id="${tab.windowId}">
+                    <div class="ai-result-header">
+                        <div class="ai-result-score" style="background-color: ${scoreColor}">
+                            ${result.score}%
+                        </div>
+                        <div class="ai-result-title">${this.escapeHtml(tab.title)}</div>
+                        <div class="ai-result-actions">
+                            <button class="ai-result-action" onclick="window.tabOracle.activateTab(${tab.id}, ${tab.windowId})">
+                                <span class="action-icon">🔗</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="ai-result-url">${this.escapeHtml(tab.url)}</div>
+                    <div class="ai-result-explanation">
+                        <span class="explanation-label">AI Analysis:</span>
+                        ${this.escapeHtml(result.explanation)}
+                    </div>
+                    ${result.concepts && result.concepts.length > 0 ? `
+                        <div class="ai-result-concepts">
+                            <span class="concepts-label">Key Concepts:</span>
+                            ${result.concepts.map(concept => `<span class="concept-tag">${this.escapeHtml(concept)}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+        
+        aiResults.innerHTML = `
+            <div class="ai-results-header">
+                <div class="ai-results-count">Found ${results.length} relevant tabs</div>
+                <div class="ai-results-info">Ranked by AI relevance</div>
+            </div>
+            <div class="ai-results-list">
+                ${resultsHtml}
+            </div>
+        `;
+    }
+
+    showAISearchError(message) {
+        const aiResults = document.getElementById('smartSearchResults');
+        if (!aiResults) return;
+        
+        aiResults.style.display = 'block';
+        aiResults.innerHTML = `
+            <div class="ai-search-error">
+                <div class="error-icon">⚠️</div>
+                <div class="error-text">${this.escapeHtml(message)}</div>
+                <div class="error-subtext">Try using the regular search instead</div>
+            </div>
+        `;
     }
 
     createTabElement(tab) {

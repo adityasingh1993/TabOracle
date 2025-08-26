@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "TabOracle",
-  "version": "1.0",
-  "description": "Intelligent context-aware tab search and organization with Ctrl+Space shortcut",
+  "name": "TabOracle - Intelligent Tab Management",
+  "version": "1.0.0",
+  "description": "Intelligent context-aware tab search and organization with AI-powered explanations and summaries",
   "permissions": [
     "tabs",
     "storage",
@@ -52,6 +52,7 @@
     }
   },
   "icons": {
+    "16": "icon16.png",
     "32": "icon32.png",
     "48": "icon48.png",
     "128": "icon128.png"
