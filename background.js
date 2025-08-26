@@ -38,6 +38,8 @@ let tabs = [];
 let currentTabId = null;
 let contextMenuCreated = false;
 let contextMenuCreating = false;
+// Persist summaries per tab until tab is closed
+const tabSummaries = {}; // { [tabId:number]: summaryData }
 
 // Initialize tabs on startup
 function initializeTabs() {
@@ -117,6 +119,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
     tabs = tabs.filter(tab => tab.id !== tabId);
     console.log('🗑️ TabOracle: Tab removed, remaining tabs:', tabs.length);
+    // Cleanup persisted summary for closed tab
+    if (tabSummaries[tabId]) {
+        delete tabSummaries[tabId];
+        console.log('🗑️ TabOracle: Cleared persisted summary for tab', tabId);
+    }
 });
 
 // Listen for tab creation
@@ -341,6 +348,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const categories = categorizeTabs(currentTabs);
             console.log('🔍 TabOracle: Returning categories:', Object.keys(categories).length);
             sendResponse({ categories: categories });
+        } else if (message.action === 'setTabSummary') {
+            try {
+                const { tabId, summary } = message;
+                if (typeof tabId === 'number' && summary) {
+                    tabSummaries[tabId] = summary;
+                    sendResponse({ success: true });
+                } else {
+                    sendResponse({ success: false, error: 'Invalid tabId or summary' });
+                }
+            } catch (e) {
+                sendResponse({ success: false, error: e.message });
+            }
+            return true;
+        } else if (message.action === 'getTabSummary') {
+            try {
+                const { tabId } = message;
+                if (typeof tabId === 'number' && tabSummaries[tabId]) {
+                    sendResponse({ success: true, summary: tabSummaries[tabId] });
+                } else {
+                    sendResponse({ success: false, error: 'No summary for tab' });
+                }
+            } catch (e) {
+                sendResponse({ success: false, error: e.message });
+            }
+            return true;
         } else if (message.action === 'activateTab') {
             try {
                 const { tabId, windowId } = message;
@@ -404,6 +436,36 @@ async function extractTabContent(tabId) {
     try {
         console.log('🔍 TabOracle: Extracting content from tab:', tabId);
         
+        // Detect PDFs early and route through PDF extraction for better results
+        try {
+            const tab = await new Promise((resolve) => {
+                chrome.tabs.get(tabId, (t) => {
+                    if (chrome.runtime.lastError) resolve(null); else resolve(t);
+                });
+            });
+            if (tab && tab.url) {
+                let effectiveUrl = tab.url;
+                try {
+                    const u = new URL(tab.url);
+                    if (u.protocol === 'chrome-extension:' && /mhjfbmdgcfjbbpaeojofohoefgiehjai/i.test(u.host)) {
+                        // Chromium PDF viewer: try to extract underlying src/file
+                        effectiveUrl = u.searchParams.get('src') || u.searchParams.get('file') || tab.url;
+                        try { effectiveUrl = decodeURIComponent(effectiveUrl); } catch (_) {}
+                    }
+                } catch (_) {}
+                const isPdf = /\.pdf($|[?#])/i.test(effectiveUrl);
+                if (isPdf) {
+                    console.log('📄 TabOracle: PDF detected, using offscreen PDF text extraction');
+                    const pdfContent = await processPDFFile(tabId);
+                    if (pdfContent && pdfContent.content) {
+                        return pdfContent; // Return structured object with title/content/type
+                    }
+                }
+            }
+        } catch (pdfDetectErr) {
+            console.warn('⚠️ TabOracle: PDF detection error, continuing with normal extraction:', pdfDetectErr);
+        }
+        
         // First, try to inject content script if it's not already there
         try {
             await chrome.scripting.executeScript({
@@ -465,6 +527,20 @@ async function extractTabContent(tabId) {
 }
 
 // ===== PDF PROCESSING =====
+async function ensureOffscreenDocument() {
+    try {
+        // Try to create offscreen document; if it already exists, ignore the error
+        await chrome.offscreen.createDocument({
+            url: 'offscreen.html',
+            reasons: ['DOM_PARSER'],
+            justification: 'Parse PDF content for summarization without a visible tab'
+        });
+        console.log('✅ TabOracle: Offscreen document created');
+    } catch (e) {
+        // If the document already exists, Chrome throws an error we can safely ignore
+        console.log('ℹ️ TabOracle: Offscreen document create result:', e && e.message ? e.message : 'ok/exists');
+    }
+}
 async function processPDFContent(tabId, url) {
     try {
         if (url.includes('arxiv.org')) {
@@ -530,19 +606,48 @@ async function processPDFFile(tabId) {
         
         console.log('🔍 TabOracle: PDF URL:', tab.url);
         
-        // Use offscreen document to process PDF
-        const response = await new Promise((resolve) => {
-            chrome.runtime.sendMessage({
-                action: 'offscreenParsePdf',
-                url: tab.url
-            }, (response) => {
-                if (chrome.runtime.lastError) {
-                    resolve({ success: false, error: chrome.runtime.lastError.message });
-                } else {
-                    resolve(response);
-                }
+        // Ensure offscreen document is available
+        await ensureOffscreenDocument();
+        
+        // Prefer fetching as ArrayBuffer to avoid CORS in pdf.js
+        let response = null;
+        try {
+            const dataResp = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({ action: 'fetchPdfAsData', url: tab.url }, (r) => {
+                    if (chrome.runtime.lastError) {
+                        resolve({ success: false, error: chrome.runtime.lastError.message });
+                    } else {
+                        resolve(r);
+                    }
+                });
             });
-        });
+            if (dataResp && dataResp.success && dataResp.data) {
+                response = await new Promise((resolve) => {
+                    chrome.runtime.sendMessage({ action: 'offscreenParsePdfData', data: dataResp.data }, (r) => {
+                        if (chrome.runtime.lastError) {
+                            resolve({ success: false, error: chrome.runtime.lastError.message });
+                        } else {
+                            resolve(r);
+                        }
+                    });
+                });
+            }
+        } catch (e) {
+            console.warn('⚠️ TabOracle: fetchPdfAsData/offscreenParsePdfData path failed:', e);
+        }
+        
+        // Fallback to letting offscreen fetch by URL (may fail due to CORS on some sites)
+        if (!response || !response.success) {
+            response = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({ action: 'offscreenParsePdf', url: tab.url }, (r) => {
+                    if (chrome.runtime.lastError) {
+                        resolve({ success: false, error: chrome.runtime.lastError.message });
+                    } else {
+                        resolve(r);
+                    }
+                });
+            });
+        }
         
         if (response && response.success) {
             console.log('✅ TabOracle: PDF text extracted successfully, length:', response.contentLength);

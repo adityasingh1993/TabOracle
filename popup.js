@@ -406,6 +406,11 @@ class TabOraclePopup {
                 summaryData = this.basicFallbackSummary(pageContent, pageTitle);
             }
 
+            // Persist summary in background so it survives popup closes
+            try {
+                await chrome.runtime.sendMessage({ action: 'setTabSummary', tabId: activeTab.id, summary: summaryData });
+            } catch (_e) {}
+
             this.setSummaryLoading(false);
             this.renderSummary(summaryData);
         } catch (error) {
@@ -762,6 +767,22 @@ class TabOraclePopup {
         });
 
         this.currentTab = tabName;
+        // When switching to pageSummaryTab, try to load persisted summary for active tab
+        if (tabName === 'pageSummaryTab') {
+            (async () => {
+                try {
+                    const activeTab = await new Promise((resolve) => {
+                        try { chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs && tabs[0])); } catch (_e) { resolve(null); }
+                    });
+                    if (activeTab && activeTab.id) {
+                        const resp = await chrome.runtime.sendMessage({ action: 'getTabSummary', tabId: activeTab.id });
+                        if (resp && resp.success && resp.summary) {
+                            this.renderSummary(resp.summary);
+                        }
+                    }
+                } catch (_e) {}
+            })();
+        }
         
         // Load appropriate content
         switch(tabName) {

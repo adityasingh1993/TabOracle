@@ -88,6 +88,7 @@
     let explainMeContent = null;
     let explainMeLoading = null;
     let explainPinned = false;
+    let currentExplainRequestId = 0; // prevent stale results overwriting newer ones
 
     function createExplainMeOverlay() {
         try {
@@ -559,12 +560,24 @@
 
     async function generateExplanation(selectedText) {
         try {
+            // Resolve latest selection if none provided
+            if (!selectedText || (typeof selectedText === 'string' && selectedText.trim() === '')) {
+                try {
+                    selectedText = (window.getSelection && window.getSelection().toString()) || '';
+                    selectedText = selectedText ? selectedText.trim() : '';
+                } catch (_) { selectedText = ''; }
+            }
+
+            // Track this request to avoid race conditions
+            const requestId = ++currentExplainRequestId;
+
             // Show loading state
             if (explainMeLoading) {
                 explainMeLoading.style.display = 'block';
             }
             if (explainMeContent) {
                 explainMeContent.style.display = 'none';
+                explainMeContent.innerHTML = '';
             }
             
             // Create enhanced prompt for explanation
@@ -711,18 +724,26 @@ Keep the response clean and readable.`;
                 }
             }
             
-            // Display explanation with AI status
-            if (typeof displayExplanation === 'function') {
-                displayExplanation(explanation, aiSource);
+            // Only display if this is the latest request
+            if (requestId === currentExplainRequestId) {
+                // Display explanation with AI status
+                if (typeof displayExplanation === 'function') {
+                    displayExplanation(explanation, aiSource);
+                } else {
+                    console.error('❌ TabOracle: displayExplanation function not available');
+                }
             } else {
-                console.error('❌ TabOracle: displayExplanation function not available');
+                console.log('ℹ️ TabOracle: Stale explain result ignored');
             }
             
         } catch (error) {
             console.error('❌ TabOracle: Explanation generation failed:', error);
             if (typeof displayExplanation === 'function') {
                 const errorMessage = `Sorry, I encountered an error while generating the explanation: ${error.message}\n\nPlease try again or check the console for more details.`;
-                displayExplanation(errorMessage, 'None');
+                // Only show error if latest
+                if (currentExplainRequestId === (currentExplainRequestId|0)) {
+                    displayExplanation(errorMessage, 'None');
+                }
             } else {
                 console.error('❌ TabOracle: displayExplanation function not available for error display');
             }
