@@ -47,6 +47,9 @@ cp taboracle_combined.svg "$TEMP_DIR/"
 if [ -f "icon16.png" ]; then
     cp icon16.png "$TEMP_DIR/"
 fi
+if [ -f "icon32.png" ]; then
+    cp icon32.png "$TEMP_DIR/"
+fi
 if [ -f "icon48.png" ]; then
     cp icon48.png "$TEMP_DIR/"
 fi

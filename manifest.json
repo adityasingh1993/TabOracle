@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TabOracle - Intelligent Tab Management",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Intelligent context-aware tab search and organization with AI-powered explanations and summaries",
   "permissions": [
     "tabs",

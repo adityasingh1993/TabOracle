@@ -447,7 +447,7 @@ body {
     overflow: hidden;
     background: rgba(255, 255, 255, 0.85);  /* Semi-transparent white for subtle contrast */
     border-radius: var(--radius-lg);
-    margin: var(--spacing-2);
+    margin: 0; /* remove side margins to eliminate left space */
     backdrop-filter: blur(10px);
     border: 1px solid rgba(139, 92, 246, 0.25);  /* Subtle violet border */
     box-shadow: 0 4px 12px rgba(139, 92, 246, 0.08);  /* Violet-tinted shadow */
@@ -547,6 +547,8 @@ body {
     font-weight: 400;
 }
 
+
+
 .search-decoration {
     position: absolute;
     right: var(--spacing-3);
@@ -614,7 +616,7 @@ body {
     border-radius: var(--radius-xl);
     border: 1px solid rgba(139, 92, 246, 0.3);  /* Violet border for consistency */
     box-shadow: var(--shadow-sm);
-    margin: 0 var(--spacing-2);
+    margin: 0; /* remove horizontal margins to align flush with container */
     min-height: 0;
 }
 
@@ -1036,7 +1038,7 @@ body {
     border-radius: var(--radius-xl);
     border: 1px solid var(--gray-200);
     box-shadow: var(--shadow-sm);
-    margin: 0 var(--spacing-2);
+    margin: 0; /* align results to full width */
     min-height: 0;
 }
 
@@ -1573,7 +1575,7 @@ body {
     flex: 1;
     overflow-y: auto;
     padding: var(--spacing-3);
-    margin: 0 var(--spacing-2);
+    margin: 0; /* remove side margins */
     min-height: 0;
 }
 

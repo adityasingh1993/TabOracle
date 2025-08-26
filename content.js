@@ -1,6 +1,12 @@
 // Content script for TabOracle
 (function() {
     'use strict';
+    // Prevent multiple injections of this content script (e.g., if also programmatically injected)
+    if (window.__TABORACLE_CONTENT_LOADED__) {
+        try { console.debug('TabOracle: content.js already initialized, skipping duplicate load'); } catch (_) {}
+        return;
+    }
+    window.__TABORACLE_CONTENT_LOADED__ = true;
     
     let searchOverlay = null;
     let searchInput = null;
@@ -87,8 +93,11 @@
         try {
             console.log('🔍 TabOracle: Creating Explain Me overlay...');
             
-            if (explainMeOverlay) {
+            // Guard against duplicate overlays if script runs twice
+            const existing = document.getElementById('tab-oracle-explain-overlay');
+            if (explainMeOverlay || existing) {
                 console.log('🔍 TabOracle: Explain Me overlay already exists');
+                explainMeOverlay = existing || explainMeOverlay;
                 return;
             }
         
@@ -302,9 +311,13 @@
             closeButton.style.color = 'white';
         });
         
-        // Add close button functionality
+        // Add close button functionality with simple debounce
+        let closeInProgress = false;
         closeButton.addEventListener('click', () => {
+            if (closeInProgress) return;
+            closeInProgress = true;
             hideExplainMe();
+            setTimeout(() => { closeInProgress = false; }, 250);
         });
 
         // Create pin button (dock/undock to sidebar)
@@ -397,9 +410,14 @@
             pinButton.style.transform = 'scale(1)';
             pinButton.style.color = 'white';
         });
+        // Debounce pin toggling to avoid rapid double toggles
+        let pinToggleInProgress = false;
         pinButton.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (pinToggleInProgress) return;
+            pinToggleInProgress = true;
             setExplainPinned(!explainPinned);
+            setTimeout(() => { pinToggleInProgress = false; }, 250);
         });
         
         // Assemble header

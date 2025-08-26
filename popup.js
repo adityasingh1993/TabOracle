@@ -2073,6 +2073,8 @@ class TabOraclePopup {
         return explanation;
     }
 
+
+
     processAIResults(aiResults, tabsWithContent) {
         return aiResults.map(result => {
             const tab = tabsWithContent[result.index];
