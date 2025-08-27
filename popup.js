@@ -538,6 +538,49 @@ class TabOraclePopup {
             <div class="ai-disclaimer" style="margin-top: 12px; font-size: 11px; color: #6b7280;">
                 ⚠️ AI Generated content may be inaccurate. Verify important information.
             </div>
+            <div class="review-request" style="margin-top: 16px; text-align: center;">
+                <div style="
+                    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.1));
+                    border: 1px solid rgba(139, 92, 246, 0.2);
+                    border-radius: 12px;
+                    padding: 16px;
+                    margin: 16px 0;
+                ">
+                    <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px;">
+                        🎉 Enjoying TabOracle?
+                    </div>
+                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 12px;">
+                        Help others discover this extension by leaving a review!
+                    </div>
+                    <button id="reviewButton" style="
+                        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        padding: 8px 16px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                        margin-right: 8px;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        ⭐ Leave a Review
+                    </button>
+                    <button id="supportButton" style="
+                        background: linear-gradient(135deg, #f59e0b, #d97706);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        padding: 8px 16px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        ☕ Support TabOracle
+                    </button>
+                </div>
+            </div>
         `;
     }
     initializeElements() {
@@ -598,6 +641,58 @@ class TabOraclePopup {
         }
     }
 
+        setupReviewButton() {
+        // Function to open Chrome Web Store review page
+        const openReviewPage = () => {
+            try {
+                const extensionId = chrome.runtime.id;
+                const reviewUrl = `https://chrome.google.com/webstore/detail/${extensionId}/reviews`;
+                chrome.tabs.create({ url: reviewUrl });
+                console.log('🎯 TabOracle: User clicked review button');
+            } catch (error) {
+                console.error('❌ TabOracle: Error opening review URL:', error);
+                // Fallback: try to open a generic review page
+                try {
+                    window.open('https://chrome.google.com/webstore/detail/taboracle-ai-powered-tab-intelligence/reviews', '_blank');
+                } catch (fallbackError) {
+                    console.error('❌ TabOracle: Fallback also failed:', fallbackError);
+                }
+            }
+        };
+        
+        // Set up review button click handlers
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'reviewButton') {
+                openReviewPage();
+            }
+        });
+        
+        // Also handle Explain Me review button if it exists
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'explainMeReviewButton') {
+                openReviewPage();
+            }
+        });
+        
+        // Handle support button clicks
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'supportButton') {
+                this.openSupportPage();
+            }
+        });
+ 
+
+    }
+    
+    openSupportPage() {
+        // Open Buy Me a Coffee support page
+        const supportUrl = 'https://buymeacoffee.com/adityas';
+        chrome.tabs.create({ url: supportUrl });
+        console.log('🎯 TabOracle: User clicked support button');
+    }
+    
+
+
     setupEventListeners() {
         console.log('🎯 TabOracle: Setting up event listeners...');
         
@@ -635,6 +730,9 @@ class TabOraclePopup {
                 }
             });
         }
+        
+        // Review button functionality
+        this.setupReviewButton();
         
         // Category selection
         if (this.categoriesGrid) {

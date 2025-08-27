@@ -1016,12 +1016,60 @@ IMPORTANT:
                     font-size: 12px; 
                     color: #6b7280;
                     font-style: italic;
+                    margin-bottom: 16px;
                 ">
                     ⚠️ AI Generated content may be inaccurate. Please verify important information.
+                </div>
+                
+                <!-- Review Request -->
+                <div style="
+                    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.1));
+                    border: 1px solid rgba(139, 92, 246, 0.2);
+                    border-radius: 12px;
+                    padding: 16px;
+                    text-align: center;
+                    margin-top: 16px;
+                ">
+                    <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px;">
+                        🎉 Enjoying TabOracle?
+                    </div>
+                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 12px;">
+                        Help others discover this extension by leaving a review!
+                    </div>
+                    <button id="explainMeReviewButton" style="
+                        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        padding: 8px 16px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                        margin-right: 8px;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        ⭐ Leave a Review
+                    </button>
+                    <button id="explainMeSupportButton" style="
+                        background: linear-gradient(135deg, #f59e0b, #d97706);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        padding: 8px 16px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        ☕ Support TabOracle
+                    </button>
                 </div>
             `;
             
             explainMeContent.innerHTML = displayContent;
+            
+            // Add inline handlers for the buttons
+            addInlineHandlers();
         }
     }
 
@@ -1204,6 +1252,83 @@ IMPORTANT:
         return cleanedText;
     }
     
+    // Review and support button functionality for Explain Me
+    function setupExplainMeButtons() {
+        // Use event delegation to handle dynamically created buttons
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'explainMeReviewButton') {
+                handleReviewButtonClick();
+            }
+            
+            if (e.target.id === 'explainMeSupportButton') {
+                handleSupportButtonClick();
+            }
+        });
+    }
+    
+    // Handle review button click
+    function handleReviewButtonClick() {
+        try {
+            const extensionId = chrome.runtime.id;
+            const reviewUrl = `https://chrome.google.com/webstore/detail/${extensionId}/reviews`;
+            chrome.tabs.create({ url: reviewUrl });
+            console.log('🎯 TabOracle: User clicked Explain Me review button');
+        } catch (error) {
+            console.error('❌ TabOracle: Error opening review URL:', error);
+            // Fallback: try to open a generic review page
+            try {
+                window.open('https://chrome.google.com/webstore/detail/taboracle-ai-powered-tab-intelligence/reviews', '_blank');
+            } catch (fallbackError) {
+                console.error('❌ TabOracle: Fallback also failed:', fallbackError);
+            }
+        }
+    }
+    
+    // Handle support button click
+    function handleSupportButtonClick() {
+        try {
+            const supportUrl = 'https://buymeacoffee.com/adityas';
+            chrome.tabs.create({ url: supportUrl });
+            console.log('🎯 TabOracle: User clicked Explain Me support button');
+        } catch (error) {
+            console.error('❌ TabOracle: Error opening support URL:', error);
+            // Fallback: try to open support page in new window
+            try {
+                window.open(supportUrl, '_blank');
+            } catch (fallbackError) {
+                console.error('❌ TabOracle: Support fallback also failed:', fallbackError);
+            }
+        }
+    }
+    
+    // Initialize button functionality
+    setupExplainMeButtons();
+    
+    // Also add inline onclick handlers as backup
+    function addInlineHandlers() {
+        // This will be called after content is displayed
+        setTimeout(() => {
+            const reviewBtn = document.getElementById('explainMeReviewButton');
+            const supportBtn = document.getElementById('explainMeSupportButton');
+            
+            if (reviewBtn) {
+                reviewBtn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleReviewButtonClick();
+                };
+            }
+            
+            if (supportBtn) {
+                supportBtn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSupportButtonClick();
+                };
+            }
+        }, 100);
+    }
+
     // Message listener for Explain Me feature
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('🔍 TabOracle: Message received:', message);
