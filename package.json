@@ -1,0 +1,32 @@
+{
+  "name": "taboracle-security",
+  "version": "1.0.0",
+  "description": "Security tools for TabOracle Chrome Extension",
+  "main": "index.js",
+  "scripts": {
+    "secure": "./secure-code.sh",
+    "minify": "terser popup.js content.js background.js --compress --mangle --comments false",
+    "obfuscate": "javascript-obfuscator popup.js --output popup.obf.js",
+    "build": "npm run minify && npm run obfuscate",
+    "test": "echo \"Testing security measures...\""
+  },
+  "keywords": [
+    "chrome-extension",
+    "security",
+    "obfuscation",
+    "minification",
+    "taboracle"
+  ],
+  "author": "TabOracle Team",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "terser": "^5.24.0",
+    "javascript-obfuscator": "^4.1.0"
+  },
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "private"
+  },
+  "private": true
+}

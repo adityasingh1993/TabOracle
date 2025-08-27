@@ -187,20 +187,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Handle PDF processing requests
     if (message.action === 'offscreenParsePdf') {
         console.log('🔍 TabOracle: PDF parsing request received for URL:', message.url);
-        
-        // Forward to offscreen document
-        chrome.runtime.sendMessage({
-            action: 'offscreenParsePdf',
-            url: message.url
-        }, (response) => {
-            if (chrome.runtime.lastError) {
-                console.error('❌ TabOracle: Offscreen PDF parsing failed:', chrome.runtime.lastError);
-                sendResponse({ success: false, error: chrome.runtime.lastError.message });
-            } else {
-                console.log('✅ TabOracle: Offscreen PDF parsing successful');
-                sendResponse(response);
-            }
-        });
+        (async () => {
+            try {
+                await ensureOffscreenDocument();
+            } catch (_e) {}
+            // Forward to offscreen document
+            chrome.runtime.sendMessage({
+                action: 'offscreenParsePdf',
+                url: message.url
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.error('❌ TabOracle: Offscreen PDF parsing failed:', chrome.runtime.lastError);
+                    sendResponse({ success: false, error: chrome.runtime.lastError.message });
+                } else {
+                    console.log('✅ TabOracle: Offscreen PDF parsing successful');
+                    sendResponse(response);
+                }
+            });
+        })();
         return true; // Keep message channel open
     }
 
@@ -247,6 +251,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return true; // Keep message channel open
     }
+
+    // (Removed reference extraction handler)
 });
 
 // ===== TAB LOADING GUARANTEE =====
@@ -517,6 +523,14 @@ async function extractTabContent(tabId) {
                         return pdfContent; // Return structured object with title/content/type
                     }
                 }
+                // Handle arXiv pages (abs/pdf without explicit .pdf)
+                if (/arxiv\.org/i.test(effectiveUrl)) {
+                    console.log('🔍 TabOracle: arXiv page detected, using arXiv-aware extraction');
+                    const arxivResult = await processPDFContent(tabId, effectiveUrl);
+                    if (arxivResult && (arxivResult.content || arxivResult.text)) {
+                        return arxivResult;
+                    }
+                }
             }
         } catch (pdfDetectErr) {
             console.warn('⚠️ TabOracle: PDF detection error, continuing with normal extraction:', pdfDetectErr);
@@ -599,12 +613,29 @@ async function ensureOffscreenDocument() {
 }
 async function processPDFContent(tabId, url) {
     try {
+        // Normalize arXiv and PDF URLs
         if (url.includes('arxiv.org')) {
-            // Handle ArXiv papers
-            return await processArXivPaper(url);
-        } else if (url.includes('.pdf')) {
-            // Handle general PDFs
-            return await processPDFFile(tabId);
+            // If it's an arXiv abstract page, try PDF first, then fallback to abstract
+            const absMatch = url.match(/arxiv\.org\/abs\/(\d+\.\d+)(?:v\d+)?/);
+            if (absMatch) {
+                const pdfUrl = `https://arxiv.org/pdf/${absMatch[1]}.pdf`;
+                const pdfResult = await processPDFFile(tabId, pdfUrl);
+                if (pdfResult && pdfResult.content && pdfResult.textLength > 100) {
+                    return pdfResult;
+                }
+                // Fallback to abstract
+                return await processArXivPaper(url);
+            }
+            // If it's an arXiv PDF path without .pdf, add it
+            const pdfPathMatch = url.match(/arxiv\.org\/pdf\/(\d+\.\d+)(?:v\d+)?$/);
+            if (pdfPathMatch) {
+                const pdfUrl = `https://arxiv.org/pdf/${pdfPathMatch[1]}.pdf`;
+                return await processPDFFile(tabId, pdfUrl);
+            }
+        }
+        // General PDFs or viewer URLs
+        if (/\.pdf($|[?#])/i.test(url)) {
+            return await processPDFFile(tabId, url);
         }
         return null;
     } catch (error) {
@@ -640,7 +671,7 @@ async function processArXivPaper(url) {
     }
 }
 
-async function processPDFFile(tabId) {
+async function processPDFFile(tabId, overrideUrl) {
     try {
         console.log('🔍 TabOracle: Processing PDF file for tab:', tabId);
         
@@ -660,7 +691,19 @@ async function processPDFFile(tabId) {
             return null;
         }
         
-        console.log('🔍 TabOracle: PDF URL:', tab.url);
+        // Resolve underlying PDF URL if we are on Chrome's built-in PDF viewer
+        let pdfUrl = overrideUrl || tab.url;
+        try {
+            const u = new URL(pdfUrl);
+            if (u.protocol === 'chrome-extension:' && /mhjfbmdgcfjbbpaeojofohoefgiehjai/i.test(u.host)) {
+                let src = u.searchParams.get('src') || u.searchParams.get('file');
+                if (src) {
+                    try { src = decodeURIComponent(src); } catch (_) {}
+                    pdfUrl = src;
+                }
+            }
+        } catch (_) {}
+        console.log('🔍 TabOracle: Effective PDF URL:', pdfUrl);
         
         // Ensure offscreen document is available
         await ensureOffscreenDocument();
@@ -669,7 +712,7 @@ async function processPDFFile(tabId) {
         let response = null;
         try {
             const dataResp = await new Promise((resolve) => {
-                chrome.runtime.sendMessage({ action: 'fetchPdfAsData', url: tab.url }, (r) => {
+                chrome.runtime.sendMessage({ action: 'fetchPdfAsData', url: pdfUrl }, (r) => {
                     if (chrome.runtime.lastError) {
                         resolve({ success: false, error: chrome.runtime.lastError.message });
                     } else {
@@ -695,7 +738,7 @@ async function processPDFFile(tabId) {
         // Fallback to letting offscreen fetch by URL (may fail due to CORS on some sites)
         if (!response || !response.success) {
             response = await new Promise((resolve) => {
-                chrome.runtime.sendMessage({ action: 'offscreenParsePdf', url: tab.url }, (r) => {
+                chrome.runtime.sendMessage({ action: 'offscreenParsePdf', url: pdfUrl }, (r) => {
                     if (chrome.runtime.lastError) {
                         resolve({ success: false, error: chrome.runtime.lastError.message });
                     } else {
@@ -711,16 +754,38 @@ async function processPDFFile(tabId) {
                 title: tab.title || 'PDF Document',
                 content: response.content,
                 type: 'pdf',
-                url: tab.url,
+                url: pdfUrl,
                 textLength: response.contentLength
             };
         } else {
             console.error('❌ TabOracle: PDF text extraction failed:', response && response.error);
+            // If this is an arXiv PDF, fallback to fetching abstract via arXiv API
+            try {
+                if (/arxiv\.org/i.test(pdfUrl)) {
+                    const arxivMatch = pdfUrl.match(/arxiv\.org\/(?:abs|pdf)\/(\d+\.\d+)(?:v\d+)?/);
+                    const arxivId = arxivMatch ? arxivMatch[1] : null;
+                    if (arxivId) {
+                        const arxiv = await processArXivPaper(`https://arxiv.org/abs/${arxivId}`);
+                        if (arxiv && arxiv.content) {
+                            console.log('✅ TabOracle: Using arXiv abstract as fallback content');
+                            return {
+                                title: arxiv.title || (tab.title || 'ArXiv Paper'),
+                                content: arxiv.content,
+                                type: 'arxiv',
+                                url: pdfUrl,
+                                textLength: arxiv.content.length
+                            };
+                        }
+                    }
+                }
+            } catch (fallbackErr) {
+                console.warn('⚠️ TabOracle: arXiv fallback failed:', fallbackErr);
+            }
             return {
                 title: tab.title || 'PDF Document',
                 content: 'PDF content extraction failed',
                 type: 'pdf',
-                url: tab.url,
+                url: pdfUrl,
                 error: response && response.error
             };
         }

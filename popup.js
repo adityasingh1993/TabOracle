@@ -606,12 +606,16 @@ class TabOraclePopup {
         this.testLanguageModelButton = document.getElementById('testLanguageModel');
         this.pageSummaryContent = document.getElementById('pageSummaryContent');
         
+        // References UI removed
+        
         // Debug: Log button elements
         console.log('🔍 TabOracle: Summary button elements found:', {
             generateSummary: !!this.generateSummaryButton,
             testLanguageModel: !!this.testLanguageModelButton,
             pageSummaryContent: !!this.pageSummaryContent
         });
+        
+        // Remove references debug logs
         
         this.geminiNotice = document.getElementById('geminiNotice');
         this.openFlagsButton = document.getElementById('openFlags');
@@ -866,6 +870,8 @@ class TabOraclePopup {
             console.error('❌ TabOracle: Generate Summary button not found');
         }
         
+        // Remove references event listeners
+        
 
         
         if (this.openFlagsButton) {
@@ -953,6 +959,7 @@ class TabOraclePopup {
                 console.log('🔄 TabOracle: Page summary tab ready');
                 this.ensureLanguageModelInitialized();
                 break;
+            
             default:
                 console.log('🔄 TabOracle: Unknown tab:', tabName);
         }
@@ -3082,6 +3089,258 @@ class TabOraclePopup {
         } catch (error) {
             this.logDebug(`❌ Category click test error: ${error.message}`, 'error');
         }
+    }
+
+    // ===== REFERENCE EXTRACTION METHODS =====
+    
+    async handleExtractReferences() {
+        console.log('🔍 TabOracle: handleExtractReferences called');
+        
+        try {
+            // Get active tab
+            const activeTab = await new Promise((resolve) => {
+                try { chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs && tabs[0])); } catch (_e) { resolve(null); }
+            });
+            
+            if (!activeTab) {
+                console.error('❌ TabOracle: No active tab found');
+                this.setReferencesError('No active tab found');
+                return;
+            }
+            
+            console.log('🔍 TabOracle: Active tab for reference extraction:', activeTab);
+            
+            // Check if it's a PDF
+            if (activeTab.url && activeTab.url.toLowerCase().includes('.pdf')) {
+                console.log('🔍 TabOracle: PDF detected for reference extraction');
+                this.setReferencesLoading(true, 'Extracting PDF content...');
+                
+                try {
+                    // First extract PDF content
+                    const pdfResponse = await chrome.runtime.sendMessage({
+                        action: 'offscreenParsePdf',
+                        url: activeTab.url
+                    });
+                    
+                    if (pdfResponse && pdfResponse.success) {
+                        console.log('✅ TabOracle: PDF extraction successful, extracting references...');
+                        this.setReferencesLoading(true, 'Extracting references...');
+                        
+                        // Extract references from PDF content
+                        const referencesResponse = await chrome.runtime.sendMessage({
+                            action: 'extractReferences',
+                            content: pdfResponse.content
+                        });
+                        
+                        if (referencesResponse && referencesResponse.success) {
+                            this.setReferencesLoading(false);
+                            this.renderReferences(referencesResponse.references);
+                        } else {
+                            this.setReferencesError('Failed to extract references from PDF');
+                        }
+                    } else {
+                        this.setReferencesError('Failed to extract PDF content');
+                    }
+                } catch (error) {
+                    console.error('❌ TabOracle: PDF reference extraction failed:', error);
+                    this.setReferencesError('PDF reference extraction failed: ' + error.message);
+                }
+            } else {
+                // Regular web page - try to extract from page content
+                console.log('🔍 TabOracle: Regular web page, extracting from page content');
+                this.setReferencesLoading(true, 'Extracting page content...');
+                
+                try {
+                    // Get page content using content script
+                    const contentResponse = await chrome.tabs.sendMessage(activeTab.id, {
+                        action: 'getPageContent'
+                    });
+                    
+                    if (contentResponse && contentResponse.success) {
+                        this.setReferencesLoading(true, 'Extracting references...');
+                        
+                        // Extract references from page content
+                        const referencesResponse = await chrome.runtime.sendMessage({
+                            action: 'extractReferences',
+                            content: contentResponse.content
+                        });
+                        
+                        if (referencesResponse && referencesResponse.success) {
+                            this.setReferencesLoading(false);
+                            this.renderReferences(referencesResponse.references);
+                        } else {
+                            this.setReferencesError('Failed to extract references from page');
+                        }
+                    } else {
+                        this.setReferencesError('Failed to extract page content');
+                    }
+                } catch (error) {
+                    console.error('❌ TabOracle: Page reference extraction failed:', error);
+                    this.setReferencesError('Page reference extraction failed: ' + error.message);
+                }
+            }
+        } catch (error) {
+            console.error('❌ TabOracle: handleExtractReferences failed:', error);
+            this.setReferencesError('Reference extraction failed: ' + error.message);
+        }
+    }
+
+    async handleExportReferences() {
+        console.log('🔍 TabOracle: handleExportReferences called');
+        
+        if (!this.currentReferences) {
+            console.error('❌ TabOracle: No references to export');
+            return;
+        }
+        
+        try {
+            // Create export options
+            const exportFormats = [
+                { label: 'JSON', value: 'json' },
+                { label: 'BibTeX', value: 'bibtex' },
+                { label: 'RIS', value: 'ris' }
+            ];
+            
+            // For now, export as JSON
+            const exportData = JSON.stringify(this.currentReferences, null, 2);
+            
+            // Create and download file
+            const blob = new Blob([exportData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'taboracle-references.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            console.log('✅ TabOracle: References exported successfully');
+        } catch (error) {
+            console.error('❌ TabOracle: Export failed:', error);
+        }
+    }
+
+    setReferencesLoading(loading, message = 'Extracting references...') {
+        if (loading) {
+            this.referencesContent.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #666;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+                    <div style="font-size: 18px; margin-bottom: 16px;">${message}</div>
+                    <div style="font-size: 14px; color: #999;">Please wait...</div>
+                </div>
+            `;
+        }
+    }
+
+    setReferencesError(message) {
+        this.referencesContent.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #e74c3c;">
+                <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
+                <div style="font-size: 18px; margin-bottom: 16px;">Extraction Failed</div>
+                <div style="font-size: 14px; color: #999;">${message}</div>
+            </div>
+        `;
+    }
+
+    debugShowReferencesTab() {
+        console.log('🔧 TabOracle: Debug - Showing References tab');
+        
+        // List all tabs
+        const allTabs = document.querySelectorAll('.nav-tab');
+        console.log('All tabs found:', allTabs.length);
+        allTabs.forEach((tab, index) => {
+            console.log(`  ${index}: ${tab.dataset.tab} - "${tab.textContent.trim()}" - visible: ${tab.offsetWidth > 0}`);
+        });
+        
+        // Find References tab
+        const referencesTab = document.querySelector('[data-tab="referencesTab"]');
+        if (referencesTab) {
+            console.log('✅ References tab found:', referencesTab);
+            console.log('References tab width:', referencesTab.offsetWidth);
+            console.log('References tab display:', window.getComputedStyle(referencesTab).display);
+            console.log('References tab visibility:', window.getComputedStyle(referencesTab).visibility);
+            
+            // Force show References tab
+            this.switchTab('referencesTab');
+            
+            // Also try to make it more visible
+            referencesTab.style.backgroundColor = '#ffeb3b';
+            referencesTab.style.color = '#000';
+            referencesTab.style.border = '2px solid red';
+            
+            console.log('🔧 References tab should now be highlighted and visible');
+        } else {
+            console.error('❌ References tab not found');
+        }
+    }
+
+    renderReferences(referencesData) {
+        console.log('🔍 TabOracle: Rendering references:', referencesData);
+        
+        this.currentReferences = referencesData;
+        
+        if (!referencesData || referencesData.totalReferences === 0) {
+            this.referencesContent.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #666;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">📚</div>
+                    <div style="font-size: 18px; margin-bottom: 16px;">No References Found</div>
+                    <div style="font-size: 14px; color: #999;">No references were found in this document</div>
+                </div>
+            `;
+            this.exportReferencesButton.style.display = 'none';
+            return;
+        }
+        
+        // Show export button
+        this.exportReferencesButton.style.display = 'inline-flex';
+        
+        // Create references display
+        let html = `
+            <div class="references-summary">
+                <div class="references-stats">
+                    <div class="stat-item">
+                        <span class="stat-number">${referencesData.totalReferences}</span>
+                        <span class="stat-label">References</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">${Math.round(referencesData.confidence * 100)}%</span>
+                        <span class="stat-label">Confidence</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">${referencesData.identifiers.dois.length}</span>
+                        <span class="stat-label">DOIs</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="references-list">
+        `;
+        
+        referencesData.references.forEach((ref, index) => {
+            html += `
+                <div class="reference-item">
+                    <div class="reference-header">
+                        <span class="reference-number">${index + 1}</span>
+                        <span class="reference-type">${ref.type}</span>
+                        <span class="reference-confidence">${Math.round(ref.confidence * 100)}%</span>
+                    </div>
+                    <div class="reference-content">
+                        ${ref.authors.length > 0 ? `<div class="reference-authors">${ref.authors.join(', ')}</div>` : ''}
+                        ${ref.title ? `<div class="reference-title">"${ref.title}"</div>` : ''}
+                        ${ref.journal ? `<div class="reference-journal">${ref.journal}</div>` : ''}
+                        ${ref.year ? `<div class="reference-year">${ref.year}</div>` : ''}
+                        ${ref.doi ? `<div class="reference-doi">DOI: ${ref.doi}</div>` : ''}
+                        ${ref.url ? `<div class="reference-url"><a href="${ref.url}" target="_blank">View Paper</a></div>` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
+        
+        this.referencesContent.innerHTML = html;
     }
 }
 

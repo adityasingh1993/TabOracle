@@ -380,6 +380,13 @@ body {
     display: flex;
     gap: 0;
     padding: 0 var(--spacing-4);
+    overflow-x: auto;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+}
+
+.nav-tabs::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
 }
 
 .nav-tab {
@@ -396,8 +403,10 @@ body {
     align-items: center;
     gap: var(--spacing-2);
     position: relative;
-    flex: 1;
+    flex: 0 0 auto;
     justify-content: center;
+    white-space: nowrap;
+    min-width: 80px;
 }
 
 .nav-tab:hover {
@@ -485,6 +494,7 @@ body {
     flex-direction: column;
     min-height: 0;
 }
+
 
 .section-header {
     margin-bottom: var(--spacing-4);
