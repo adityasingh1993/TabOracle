@@ -1,5 +1,11 @@
 // Offscreen PDF parsing using pdf.js
 
+if (self && self.pdfjsLib) {
+	try {
+		pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('vendor/pdfjs/pdf.worker.min.js');
+	} catch (_) {}
+}
+
 async function extractPdfText(url) {
   if (!self.pdfjsLib) throw new Error('pdf.js not loaded');
   const loadingTask = pdfjsLib.getDocument({ url });

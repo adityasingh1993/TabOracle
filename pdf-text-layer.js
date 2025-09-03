@@ -287,6 +287,44 @@ class PDFTextLayerOverlay {
         const selection = window.getSelection();
         return selection.toString().trim().length > 0;
     }
+
+    // Public method to get full text content from all pages
+    async getFullText() {
+        try {
+            if (!this.pdfDocument) {
+                console.warn('⚠️ TabOracle: PDF document not loaded');
+                return '';
+            }
+
+            console.log('🔍 TabOracle: Extracting full text from PDF...');
+            let fullText = '';
+            
+            // Extract text from all pages
+            for (let pageNum = 1; pageNum <= this.totalPages; pageNum++) {
+                try {
+                    const page = await this.pdfDocument.getPage(pageNum);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + '\n';
+                    
+                    // Add page separator
+                    if (pageNum < this.totalPages) {
+                        fullText += '\n--- Page ' + pageNum + ' ---\n\n';
+                    }
+                } catch (pageError) {
+                    console.warn(`⚠️ TabOracle: Error extracting text from page ${pageNum}:`, pageError);
+                    fullText += `\n--- Page ${pageNum} (Error: ${pageError.message}) ---\n\n`;
+                }
+            }
+            
+            console.log(`✅ TabOracle: Full text extracted from ${this.totalPages} pages`);
+            return fullText.trim();
+            
+        } catch (error) {
+            console.error('❌ TabOracle: Error getting full text:', error);
+            return '';
+        }
+    }
 }
 
 // Initialize PDF text layer overlay when script loads

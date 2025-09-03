@@ -4,12 +4,6 @@
   <meta charset="utf-8" />
   <title>Offscreen PDF Parser</title>
   <script src="vendor/pdfjs/pdf.min.js"></script>
-  <script>
-    // Configure worker
-    if (window['pdfjsLib']) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('vendor/pdfjs/pdf.worker.min.js');
-    }
-  </script>
 </head>
 <body>
   <script src="offscreen.js"></script>

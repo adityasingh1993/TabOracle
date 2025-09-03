@@ -403,6 +403,216 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponse({ success: false, error: e.message });
             }
             return true;
+        } else if (message.action === 'generateAISummary') {
+            // Handle AI summary generation for floating button
+            (async () => {
+                try {
+                    console.log('🔍 TabOracle: Generating AI summary for floating button...');
+                    const { prompt } = message;
+                    
+                    if (!prompt) {
+                        sendResponse({ success: false, error: 'No prompt provided' });
+                        return;
+                    }
+                    
+                    // Try to use Chrome Language Model API
+                    let summary = null;
+                    let aiSource = 'None';
+                    
+                    if (typeof chrome !== 'undefined' && chrome.languageModel && chrome.languageModel.create) {
+                        try {
+                            console.log('🔍 TabOracle: Using Chrome Language Model API for summary...');
+                            const languageModel = await chrome.languageModel.create();
+                            const response = await languageModel.prompt(prompt);
+                            const rawResponse = typeof response === 'string' ? response : ((response && response.text) || (response && response.response) || JSON.stringify(response));
+                            
+                            // Try to parse JSON response
+                            const parsed = parseAIJsonSafely(rawResponse);
+                            if (parsed && parsed.summary) {
+                                summary = {
+                                    summary: parsed.summary,
+                                    keyPoints: parsed.keyPoints || [],
+                                    wordCount: parsed.wordCount || 0,
+                                    readingTime: parsed.readingTime || 'Unknown'
+                                };
+                                aiSource = 'Chrome Language Model API';
+                                console.log('✅ TabOracle: AI summary generated successfully using Chrome Language Model');
+                            } else {
+                                throw new Error('Invalid AI response format');
+                            }
+                        } catch (error) {
+                            console.warn('⚠️ TabOracle: Chrome Language Model API failed for summary:', error);
+                        }
+                    }
+                    
+                    // Try other AI methods if available
+                    if (!summary && typeof LanguageModel !== 'undefined' && LanguageModel.create) {
+                        try {
+                            console.log('🔍 TabOracle: Using Global LanguageModel for summary...');
+                            const languageModel = await LanguageModel.create();
+                            const response = await languageModel.prompt(prompt);
+                            const rawResponse = typeof response === 'string' ? response : ((response && response.text) || (response && response.response) || JSON.stringify(response));
+                            
+                            // Try to parse JSON response
+                            const parsed = parseAIJsonSafely(rawResponse);
+                            if (parsed && parsed.summary) {
+                                summary = {
+                                    summary: parsed.summary,
+                                    keyPoints: parsed.keyPoints || [],
+                                    wordCount: parsed.wordCount || 0,
+                                    readingTime: parsed.readingTime || 'Unknown'
+                                };
+                                aiSource = 'Global LanguageModel';
+                                console.log('✅ TabOracle: AI summary generated successfully using Global LanguageModel');
+                            } else {
+                                throw new Error('Invalid AI response format');
+                            }
+                        } catch (error) {
+                            console.warn('⚠️ TabOracle: Global LanguageModel failed for summary:', error);
+                        }
+                    }
+                    
+                    if (summary && aiSource !== 'None') {
+                        console.log(`🎯 TabOracle: AI summary generated using: ${aiSource}`);
+                        sendResponse({
+                            success: true,
+                            summary: summary.summary,
+                            keyPoints: summary.keyPoints,
+                            wordCount: summary.wordCount,
+                            readingTime: summary.readingTime,
+                            aiSource: aiSource
+                        });
+                    } else {
+                        console.log('🔍 TabOracle: No AI available for summary, sending fallback response');
+                        sendResponse({
+                            success: false,
+                            message: 'No AI models available for summary generation',
+                            fallback: true
+                        });
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ TabOracle: Error generating AI summary:', error);
+                    sendResponse({
+                        success: false,
+                        error: error.message
+                    });
+                }
+            })();
+            return true; // Keep message channel open for async response
+        } else if (message.action === 'extractPdfText') {
+            // Handle PDF text extraction for floating button
+            (async () => {
+                try {
+                    console.log('🔍 TabOracle: Extracting PDF text for floating button...');
+                    const { url } = message;
+                    
+                    if (!url) {
+                        sendResponse({ success: false, error: 'No URL provided' });
+                        return;
+                    }
+                    
+                    // Ensure offscreen document exists
+                    async function ensureOffscreen() {
+                        try {
+                            const existing = await chrome.offscreen.hasDocument?.();
+                            if (!existing) {
+                                await chrome.offscreen.createDocument({
+                                    url: chrome.runtime.getURL('offscreen.html'),
+                                    reasons: ['BLOBS'],
+                                    justification: 'Parse PDF text in offscreen context'
+                                });
+                            }
+                        } catch (e) {
+                            console.warn('⚠️ TabOracle: ensureOffscreen failed or not supported:', e?.message || e);
+                        }
+                    }
+                    await ensureOffscreen();
+                    
+                    // Helper to send message with timeout
+                    function sendMessageWithTimeout(msg, timeoutMs = 8000) {
+                        return new Promise((resolve, reject) => {
+                            let settled = false;
+                            const timer = setTimeout(() => {
+                                if (!settled) {
+                                    settled = true;
+                                    reject(new Error('Offscreen message timeout'));
+                                }
+                            }, timeoutMs);
+                            try {
+                                chrome.runtime.sendMessage(msg, (resp) => {
+                                    if (settled) return;
+                                    settled = true;
+                                    clearTimeout(timer);
+                                    const lastErr = chrome.runtime.lastError;
+                                    if (lastErr) {
+                                        reject(new Error(lastErr.message));
+                                        return;
+                                    }
+                                    resolve(resp);
+                                });
+                            } catch (e) {
+                                if (!settled) {
+                                    settled = true;
+                                    clearTimeout(timer);
+                                    reject(e);
+                                }
+                            }
+                        });
+                    }
+                    
+                    // Use offscreen script for PDF parsing
+                    try {
+                        const response = await sendMessageWithTimeout({
+                            action: 'offscreenParsePdf',
+                            url: url
+                        });
+                        
+                        if (response && response.success) {
+                            console.log('✅ TabOracle: PDF text extracted successfully via offscreen script');
+                            sendResponse({ success: true, text: response.content });
+                        } else {
+                            throw new Error(response?.error || 'Offscreen PDF parsing failed');
+                        }
+                    } catch (offscreenError) {
+                        console.warn('⚠️ TabOracle: Offscreen PDF parsing failed, trying direct fetch:', offscreenError);
+                        
+                        // Fallback: try direct fetch and parsing
+                        try {
+                            const resp = await fetch(url, { credentials: 'include', mode: 'cors' });
+                            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                            const buf = await resp.arrayBuffer();
+                            
+                            // Ensure offscreen exists again (if it crashed)
+                            await ensureOffscreen();
+                            
+                            // Use offscreen script with data
+                            const dataResponse = await sendMessageWithTimeout({
+                                action: 'offscreenParsePdfData',
+                                data: buf
+                            });
+                            
+                            if (dataResponse && dataResponse.success) {
+                                console.log('✅ TabOracle: PDF text extracted successfully via data parsing');
+                                sendResponse({ success: true, text: dataResponse.content });
+                            } else {
+                                throw new Error(dataResponse?.error || 'Data parsing failed');
+                            }
+                        } catch (fetchError) {
+                            console.error('❌ TabOracle: Direct PDF fetch and parsing failed:', fetchError);
+                            sendResponse({ success: false, error: `PDF extraction failed: ${fetchError.message}` });
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ TabOracle: Error extracting PDF text:', error);
+                    sendResponse({
+                        success: false,
+                        error: error.message
+                    });
+                }
+            })();
+            return true; // Keep message channel open for async response
         } else if (message.action === 'startSummary') {
             (async () => {
                 try {
