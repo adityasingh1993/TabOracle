@@ -20,7 +20,6 @@
 				<div class="taboracle-main-btn"></div>
 				<div class="taboracle-hover-buttons">
 					<button class="taboracle-hover-btn summarize-btn" title="Summarize Me">
-						<span class="btn-icon">📝</span>
 						<span class="btn-label">Summarize Me</span>
 					</button>
 					<button class="taboracle-hover-btn explain-btn" title="Explain Me">
@@ -60,24 +59,51 @@
 				}
 			})();
 
+			// Create centered overlay container like Explain Me
+			const summaryOverlay = document.createElement('div');
+			summaryOverlay.id = 'taboracle-summary-overlay';
+			summaryOverlay.style.cssText = `
+				position: fixed;
+				top: 0; left: 0; right: 0; bottom: 0;
+				display: none;
+				align-items: center;
+				justify-content: center;
+				background: rgba(0,0,0,0.7);
+				z-index: 2147483646;
+				pointer-events: none;
+			`;
+
 			const summaryPanel = document.createElement('div');
 			summaryPanel.id = 'taboracle-summary-panel';
+			summaryPanel.style.cssText = `pointer-events: auto;`;
 			summaryPanel.innerHTML = `
 				<div class="summary-panel-header">
-					<span class="panel-title">📝 Page Summary</span>
-					<button class="close-panel-btn" title="Close">❌</button>
+					<div class="summary-header-left">
+						<img src="${chrome.runtime.getURL('taboracle_combined.svg')}" alt="TabOracle" class="summary-brand" onerror="this.style.display='none'" />
+					</div>
+					<div class="summary-header-center">
+						<span class="panel-title">Summarize Me</span>
+					</div>
+					<div class="summary-header-right">
+						<button class="pin-panel-btn" title="Pin">📌</button>
+						<button class="close-panel-btn" title="Close">✕</button>
+					</div>
 				</div>
 				<div class="summary-panel-body">
-					<div class="summary-loading" style="display: none;">
-						<div class="loading-spinner"></div>
-						<div class="loading-text">Generating summary...</div>
+					<div class="summary-loading" style="display: none; text-align: center; padding: 40px 20px;">
+						<div class="loading-logo" style="margin-bottom: 16px; display: flex; justify-content: center; align-items: center;">
+							<img src="${chrome.runtime.getURL('taboracle_icon_only.svg')}" alt="TabOracle" style="width: 80px; height: 80px; animation: logoGlow 2s infinite;" onerror="this.style.display='none'; this.parentElement.innerHTML='✨';" />
+						</div>
+						<div class="loading-text" style="font-size: 18px; color: #6d28d9; margin-bottom: 8px; font-weight: 600; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">AI is analyzing your text...</div>
+						<div class="loading-subtext" style="font-size: 14px; color: #6b7280; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">This may take a few seconds</div>
 					</div>
 					<div class="summary-content"></div>
 				</div>
 			`;
 
 			document.body.appendChild(floatingBtn);
-			document.body.appendChild(summaryPanel);
+			summaryOverlay.appendChild(summaryPanel);
+			document.body.appendChild(summaryOverlay);
 
 			setupFloatingButtonEvents(floatingBtn, summaryPanel);
 			addFloatingButtonStyles();
@@ -88,6 +114,7 @@
 
 	// Prevent overlapping summarize runs that can race the background messaging
 	let summarizeInProgress = false;
+	let __lastExplainSelection = '';
 
 	function setupFloatingButtonEvents(floatingBtn, summaryPanel) {
 		const mainBtn = floatingBtn.querySelector('.taboracle-main-btn');
@@ -95,6 +122,7 @@
 		const summarizeBtn = floatingBtn.querySelector('.summarize-btn');
 		const explainBtn = floatingBtn.querySelector('.explain-btn');
 		const closePanelBtn = summaryPanel.querySelector('.close-panel-btn');
+		const pinPanelBtn = summaryPanel.querySelector('.pin-panel-btn');
 
 		mainBtn.addEventListener('mouseenter', () => {
 			hoverButtons.style.display = 'flex';
@@ -113,28 +141,78 @@
 			e.preventDefault(); e.stopPropagation();
 			await handleSummarizeMe(summaryPanel);
 		});
+		// Capture selection BEFORE click steals focus and clears the selection
+		explainBtn.addEventListener('mousedown', () => {
+			try {
+				__lastExplainSelection = (window.getSelection && window.getSelection().toString().trim()) || '';
+				if (!__lastExplainSelection && window.tabOraclePDFOverlay && typeof window.tabOraclePDFOverlay.getSelectedText === 'function') {
+					__lastExplainSelection = window.tabOraclePDFOverlay.getSelectedText() || '';
+				}
+			} catch (_) { __lastExplainSelection = ''; }
+		});
+
 		explainBtn.addEventListener('click', async (e) => {
 			e.preventDefault(); e.stopPropagation();
 			try {
-				if (typeof showExplainMe === 'function') {
-					let selectedText = window.getSelection().toString().trim();
-					if (!selectedText) {
-						// Try PDF overlay
-						if (window.tabOraclePDFOverlay && typeof window.tabOraclePDFOverlay.getSelectedText === 'function') {
-							selectedText = window.tabOraclePDFOverlay.getSelectedText();
-						}
-					}
-					if (selectedText) {
-						showExplainMe(selectedText);
-					} else if (typeof showExplainMeError === 'function') {
-						showExplainMeError('No text selected', { suggestion: 'Select some text on the page to explain' });
-					}
+				let selectedText = '';
+				try { selectedText = (window.getSelection && window.getSelection().toString().trim()) || ''; } catch (_) { selectedText = ''; }
+				if (!selectedText && window.tabOraclePDFOverlay && typeof window.tabOraclePDFOverlay.getSelectedText === 'function') {
+					selectedText = window.tabOraclePDFOverlay.getSelectedText() || '';
+				}
+				if (!selectedText && __lastExplainSelection) {
+					selectedText = __lastExplainSelection;
+				}
+				if (selectedText) {
+					// Use the existing Explain Me message path handled by content.js
+					try {
+						chrome.runtime.sendMessage({ action: 'showExplainMe', selectedText });
+					} catch (_) {}
+				} else {
+					// Lightweight toast if no selection
+					const note = document.createElement('div');
+					note.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;padding:12px 16px;border-radius:8px;font-family:Arial, sans-serif;font-size:13px;z-index:2147483647;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+					note.textContent = 'No text selected. Select some text and try Explain Me again.';
+					document.body.appendChild(note);
+					setTimeout(() => { try { note.remove(); } catch (_) {} }, 3000);
 				}
 			} catch (err) {
 				console.error('TabOracle: Explain Me error', err);
 			}
 		});
-		closePanelBtn.addEventListener('click', () => { summaryPanel.style.display = 'none'; });
+		closePanelBtn.addEventListener('click', () => {
+			const overlay = document.getElementById('taboracle-summary-overlay');
+			if (window.__TABORACLE_SUMMARY_PINNED__) {
+				summaryPanel.style.display = 'none';
+				window.__TABORACLE_SUMMARY_PINNED__ = false;
+			} else if (overlay) {
+				overlay.style.display = 'none';
+			}
+		});
+		if (pinPanelBtn) {
+			pinPanelBtn.addEventListener('click', (e) => {
+				e.preventDefault(); e.stopPropagation();
+				const overlay = document.getElementById('taboracle-summary-overlay');
+				setSummaryPinned(overlay, summaryPanel, !window.__TABORACLE_SUMMARY_PINNED__);
+			});
+		}
+
+		// Review and support buttons like Explain Me
+		document.addEventListener('click', (e) => {
+			const target = e.target;
+			if (target && target.id === 'summaryReviewButton') {
+				try {
+					const extensionId = chrome.runtime.id;
+					const reviewUrl = `https://chrome.google.com/webstore/detail/${extensionId}/reviews`;
+					chrome.tabs.create({ url: reviewUrl });
+				} catch (_) {
+					try { window.open('https://chrome.google.com/webstore/detail/taboracle-ai-powered-tab-intelligence/reviews', '_blank'); } catch (_) {}
+				}
+			}
+			if (target && target.id === 'summarySupportButton') {
+				const supportUrl = 'https://buymeacoffee.com/adityas';
+				try { chrome.tabs.create({ url: supportUrl }); } catch (_) { try { window.open(supportUrl, '_blank'); } catch (_) {} }
+			}
+		});
 		makePanelDraggable(summaryPanel);
 	}
 
@@ -148,14 +226,18 @@
 		const loadingEl = summaryPanel.querySelector('.summary-loading');
 		const contentEl = summaryPanel.querySelector('.summary-content');
 		try {
-			summaryPanel.style.display = 'block';
+			summaryPanel.style.display = 'flex';
+			const overlay = document.getElementById('taboracle-summary-overlay');
+			if (overlay) overlay.style.display = 'flex';
+			// default to centered dialog
+			setSummaryPinned(overlay, summaryPanel, false);
 			loadingEl.style.display = 'block';
 			contentEl.innerHTML = '';
 
 			const isPDFPage = window.location.href.toLowerCase().includes('.pdf') || document.contentType === 'application/pdf';
 			console.log('TabOracle: PDF page:', isPDFPage);
 			let pageContent = '';
-			const pageTitle = document.title || 'Untitled Page';
+			const pageTitle = (document.title || '').trim();
 			console.log('TabOracle: Page titlesss:', pageTitle);
 			console.log("====isPDFPage:");
 			if (isPDFPage) {
@@ -172,21 +254,26 @@
 			const summary = await generateAISummary(pageTitle, pageContent);
 			loadingEl.style.display = 'none';
 			contentEl.innerHTML = `
-				<div class="summary-header">
-					<h3>${escapeHtml(pageTitle)}</h3>
+				<div class="summary-card">
+					<div class="summary-ai-badge">🤖 AI Generated</div>
+					${pageTitle ? `<h3 class=\"summary-title\">${escapeHtml(pageTitle)}</h3>` : ''}
 					<div class="summary-meta">
 						<span class="word-count">${summary.wordCount} words</span>
 						<span class="reading-time">${summary.readingTime}</span>
 					</div>
-				</div>
-				<div class="summary-text">${escapeHtml(summary.summary)}</div>
-				${summary.keyPoints && summary.keyPoints.length ? `
-					<div class="summary-key-points">
-						<h4>Key Points:</h4>
-						<ul>${summary.keyPoints.map(p => '<li>' + escapeHtml(String(p)) + '</li>').join('')}</ul>
+					<div class="summary-text">${escapeHtml(summary.summary)}</div>
+					${summary.keyPoints && summary.keyPoints.length ? `
+						<div class="summary-key-points">
+							<h4>Key Points</h4>
+							<ul>${summary.keyPoints.map(p => '<li>' + escapeHtml(String(p)) + '</li>').join('')}</ul>
+						</div>
+					` : ''}
+					<div class="summary-disclaimer">⚠️ AI-generated content may be inaccurate. Verify important information.</div>
+					<div class="summary-actions">
+						<button id="summaryReviewButton" class="review-btn">⭐ Leave a Review</button>
+						<button id="summarySupportButton" class="support-btn">☕ Support TabOracle</button>
 					</div>
-				` : ''}
-				<div class="summary-disclaimer">⚠️ AI-generated summary. Verify important information.</div>
+				</div>
 			`;
 		} catch (err) {
 			console.error('TabOracle: Summarize error', err);
@@ -376,14 +463,76 @@
 			#taboracle-floating-btn.expanded .taboracle-hover-buttons { opacity: 1; transform: translateY(0); }
 			.taboracle-hover-btn { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: #ffffff; border: 2px solid rgba(139, 92, 246, 0.35); border-radius: 25px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 600; color: #1f2937; box-shadow: 0 6px 16px rgba(139, 92, 246, 0.15); transition: all 0.2s ease; white-space: nowrap; }
 			.taboracle-hover-btn:hover { border-color: #8b5cf6; background: rgba(139, 92, 246, 0.06); transform: translateX(-4px); box-shadow: 0 8px 18px rgba(139, 92, 246, 0.25); }
-			.summary-panel-header { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 12px; border-top-right-radius: 12px; }
-			#taboracle-summary-panel { position: fixed; top: 100px; right: 30px; width: 400px; max-height: 70vh; background: white; border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); z-index: 9999; display: none; flex-direction: column; overflow: hidden; }
-			.summary-panel-body { flex: 1; padding: 20px; overflow-y: auto; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+			.summary-panel-header { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 20px; border-top-right-radius: 20px; height: 44px; box-sizing: border-box; }
+			.summary-header-left { display: flex; align-items: center; gap: 8px; }
+			.summary-brand { width: 100px; height: 32px; filter: drop-shadow(0 1px 3px rgba(251,191,36,0.3)); }
+			.summary-header-center { display: flex; align-items: center; justify-content: center; flex: 1; }
+			.summary-header-right { display: flex; align-items: center; gap: 6px; }
+			.close-panel-btn { background: none; border: none; color: white; font-weight: 700; cursor: pointer; font-size: 14px; }
+			.pin-panel-btn { background: none; border: none; color: white; font-weight: 700; cursor: pointer; font-size: 16px; margin-right: 6px; }
+			/* Gradient behind header height to avoid white corners like Explain Me */
+			#taboracle-summary-panel { position: relative; width: 800px; max-width: 90vw; max-height: 85vh; height: auto; background: linear-gradient(180deg, #6d28d9 0px, #6d28d9 44px, rgba(255,255,255,0.98) 44px); border: 0; background-clip: padding-box; border-radius: 20px; box-shadow: 0 20px 40px rgba(139, 92, 246, 0.3), 0 8px 32px rgba(0,0,0,0.2); z-index: 2147483647; display: none; flex-direction: column; overflow: hidden; }
+			/* Pinned header radius matches smaller panel radius */
+			#taboracle-summary-panel.pinned .summary-panel-header { border-top-left-radius: 12px; border-top-right-radius: 12px; }
+			#taboracle-summary-overlay { overflow: auto; }
+			.summary-panel-body { flex: 1 1 auto; min-height: 0; padding: 20px; overflow-y: auto; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
 			.loading-spinner { width: 40px; height: 40px; border: 4px solid #f3f4f6; border-top: 4px solid #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite; }
 			@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 			.summary-error { text-align: center; padding: 40px 20px; color: #dc2626; }
+			/* Card styling similar to Explain Me */
+			.summary-card { background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.98)); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 16px; padding: 32px; box-shadow: 0 10px 40px rgba(139,92,246,0.12), 0 4px 16px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8); }
+			.summary-ai-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 12px; background: rgba(109, 40, 217, 0.08); color: #6d28d9; font-size: 12px; font-weight: 600; margin-bottom: 12px; border: 1px solid rgba(109, 40, 217, 0.15); }
+			.summary-title { margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #1f2937; }
+			.summary-meta { display: flex; gap: 12px; font-size: 12px; color: #6b7280; margin-bottom: 12px; }
+			.summary-text { margin: 12px 0; line-height: 1.7; color: #374151; font-size: 15px; }
+			.summary-key-points h4 { margin: 16px 0 8px 0; font-size: 14px; color: #1f2937; }
+			.summary-key-points ul { margin: 0; padding-left: 18px; }
+			.summary-disclaimer { margin-top: 16px; padding: 12px 16px; background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 8px; font-size: 12px; color: #6b7280; font-style: italic; }
+			.summary-actions { margin-top: 16px; display: flex; gap: 8px; }
+			.summary-actions .review-btn { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer; }
+			.summary-actions .support-btn { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer; }
 		`;
 		document.head.appendChild(style);
+	}
+
+	function setSummaryPinned(overlay, panel, pinned) {
+		window.__TABORACLE_SUMMARY_PINNED__ = pinned;
+		if (!overlay || !panel) return;
+		if (pinned) {
+			// Switch to pinned sidebar-like panel
+			// Re-parent to body so hiding overlay won't hide the panel
+			try { if (overlay.contains(panel)) { document.body.appendChild(panel); } } catch (_) {}
+			overlay.style.display = 'none';
+			panel.style.display = 'flex';
+			panel.style.position = 'fixed';
+			panel.style.top = '20px';
+			panel.style.right = '20px';
+			panel.style.left = '';
+			panel.style.bottom = '';
+			panel.style.width = '360px';
+			panel.style.maxWidth = '360px';
+			panel.style.maxHeight = 'calc(100vh - 40px)';
+			panel.style.borderRadius = '12px';
+			try { panel.classList.add('pinned'); } catch (_) {}
+			panel.style.boxShadow = '0 8px 32px rgba(0,0,0,0.15), 0 4px 16px rgba(139, 92, 246, 0.1)';
+			panel.style.zIndex = '2147483647';
+		} else {
+			// Centered dialog within overlay
+			try { if (!overlay.contains(panel)) { overlay.appendChild(panel); } } catch (_) {}
+			overlay.style.display = 'flex';
+			panel.style.display = 'flex';
+			panel.style.position = 'relative';
+			panel.style.top = '';
+			panel.style.right = '';
+			panel.style.left = '';
+			panel.style.bottom = '';
+			panel.style.width = '800px';
+			panel.style.maxWidth = '90vw';
+			panel.style.maxHeight = '85vh';
+			panel.style.borderRadius = '20px';
+			try { panel.classList.remove('pinned'); } catch (_) {}
+			panel.style.boxShadow = '0 20px 40px rgba(139, 92, 246, 0.3), 0 8px 32px rgba(0,0,0,0.2)';
+		}
 	}
 
 	function init() {

@@ -136,7 +136,8 @@
             max-height: 85vh;
             overflow: hidden;
             box-shadow: 0 20px 40px rgba(139, 92, 246, 0.3), 0 8px 32px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(139, 92, 246, 0.25);
+            border: 0;
+            background-clip: padding-box;
             animation: slideInExplain 0.3s ease-out;
             position: relative;
             display: flex;
