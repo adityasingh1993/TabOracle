@@ -22,9 +22,9 @@
 					<button class="taboracle-hover-btn summarize-btn" title="Summarize Me">
 						<span class="btn-label">Summarize Me</span>
 					</button>
-					<button class="taboracle-hover-btn explain-btn" title="Explain Me">
-						<span class="btn-icon">💡</span>
-						<span class="btn-label">Explain Me</span>
+					<button class="taboracle-hover-btn searchtabs-btn" title="Search Tabs">
+						<span class="btn-icon">🔎</span>
+						<span class="btn-label">Search Tabs</span>
 					</button>
 				</div>
 			`;
@@ -120,7 +120,7 @@
 		const mainBtn = floatingBtn.querySelector('.taboracle-main-btn');
 		const hoverButtons = floatingBtn.querySelector('.taboracle-hover-buttons');
 		const summarizeBtn = floatingBtn.querySelector('.summarize-btn');
-		const explainBtn = floatingBtn.querySelector('.explain-btn');
+		const searchTabsBtn = floatingBtn.querySelector('.searchtabs-btn');
 		const closePanelBtn = summaryPanel.querySelector('.close-panel-btn');
 		const pinPanelBtn = summaryPanel.querySelector('.pin-panel-btn');
 
@@ -141,43 +141,14 @@
 			e.preventDefault(); e.stopPropagation();
 			await handleSummarizeMe(summaryPanel);
 		});
-		// Capture selection BEFORE click steals focus and clears the selection
-		explainBtn.addEventListener('mousedown', () => {
-			try {
-				__lastExplainSelection = (window.getSelection && window.getSelection().toString().trim()) || '';
-				if (!__lastExplainSelection && window.tabOraclePDFOverlay && typeof window.tabOraclePDFOverlay.getSelectedText === 'function') {
-					__lastExplainSelection = window.tabOraclePDFOverlay.getSelectedText() || '';
-				}
-			} catch (_) { __lastExplainSelection = ''; }
-		});
 
-		explainBtn.addEventListener('click', async (e) => {
+		searchTabsBtn.addEventListener('click', async (e) => {
 			e.preventDefault(); e.stopPropagation();
 			try {
-				let selectedText = '';
-				try { selectedText = (window.getSelection && window.getSelection().toString().trim()) || ''; } catch (_) { selectedText = ''; }
-				if (!selectedText && window.tabOraclePDFOverlay && typeof window.tabOraclePDFOverlay.getSelectedText === 'function') {
-					selectedText = window.tabOraclePDFOverlay.getSelectedText() || '';
-				}
-				if (!selectedText && __lastExplainSelection) {
-					selectedText = __lastExplainSelection;
-				}
-				if (selectedText) {
-					// Use the existing Explain Me message path handled by content.js
-					try {
-						chrome.runtime.sendMessage({ action: 'showExplainMe', selectedText });
-					} catch (_) {}
-				} else {
-					// Lightweight toast if no selection
-					const note = document.createElement('div');
-					note.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;padding:12px 16px;border-radius:8px;font-family:Arial, sans-serif;font-size:13px;z-index:2147483647;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
-					note.textContent = 'No text selected. Select some text and try Explain Me again.';
-					document.body.appendChild(note);
-					setTimeout(() => { try { note.remove(); } catch (_) {} }, 3000);
-				}
-			} catch (err) {
-				console.error('TabOracle: Explain Me error', err);
-			}
+				await new Promise((resolve) => {
+					try { chrome.runtime.sendMessage({ action: 'openMainPopup' }, () => resolve()); } catch (_) { resolve(); }
+				});
+			} catch (_) {}
 		});
 		closePanelBtn.addEventListener('click', () => {
 			const overlay = document.getElementById('taboracle-summary-overlay');

@@ -358,6 +358,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponse({ success: true, tabsCount: tabs.length });
             });
             return true; // Keep message channel open
+        } else if (message.action === 'openMainPopup') {
+            try {
+                await chrome.action.openPopup();
+                sendResponse({ success: true });
+            } catch (e) {
+                console.warn('⚠️ TabOracle: openPopup failed, trying fallback tab', e);
+                try {
+                    const url = chrome.runtime.getURL('popup.html');
+                    await chrome.tabs.create({ url });
+                    sendResponse({ success: true, openedTab: true });
+                } catch (e2) {
+                    sendResponse({ success: false, error: e2.message });
+                }
+            }
+            return true;
         } else if (message.action === 'getCategories') {
             // Return tab categories (AI-powered with fallback)
             (async () => {
@@ -1184,8 +1199,68 @@ async function handleAIExplanationRequest(message, sender, sendResponse) {
 // ===== CONTEXT MENU CLICK HANDLER =====
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     console.log('🔍 TabOracle: Context menu clicked:', info.menuItemId);
-    
-    if (info.menuItemId === 'explainMe') {
+
+    if (info.menuItemId === 'summarizeSelection') {
+        try {
+            let validTab = tab;
+            if (!validTab || !validTab.id || validTab.id === -1) {
+                try {
+                    const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                    if (activeTabs && activeTabs.length > 0) validTab = activeTabs[0];
+                } catch (e) {
+                    console.error('❌ TabOracle: No active tab for Summarize Selection');
+                    return;
+                }
+            }
+
+            const selectedText = (info.selectionText || '').trim();
+            if (!selectedText) {
+                console.warn('⚠️ TabOracle: No selection text provided for Summarize Selection');
+            }
+
+            // Ensure content script is ready
+            const testResult = await testContentScript(validTab.id);
+            if (!testResult) {
+                console.warn('⚠️ TabOracle: Content script not ready, injecting and retrying (summarize)');
+                await chrome.scripting.executeScript({ target: { tabId: validTab.id }, files: ['content.js', 'floating-button.js'] });
+                await new Promise(resolve => setTimeout(resolve, 400));
+            }
+
+            chrome.tabs.sendMessage(validTab.id, {
+                action: 'showSummarizeSelection',
+                selectedText
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    const msg = chrome.runtime.lastError.message || '';
+                    console.error('❌ TabOracle: Failed to trigger Summarize Selection:', msg);
+                    // Restricted page notice
+                    if (msg.includes('chrome://')) {
+                        chrome.scripting.executeScript({
+                            target: { tabId: validTab.id },
+                            func: (text) => {
+                                const notification = document.createElement('div');
+                                notification.style.cssText = `position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #dc2626; color: white; padding: 15px 20px; border-radius: 8px; font-family: Arial, sans-serif; font-size: 14px; z-index: 10001; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-width: 420px; text-align: center;`;
+                                notification.innerHTML = `<div style="font-weight: bold; margin-bottom: 8px;">⚠️ Summarize not available</div><div>This feature is not available on browser settings pages, extensions, or other restricted pages.</div><div style="margin-top: 8px; font-size: 12px;">Try selecting text on a regular webpage instead.</div>`;
+                                document.body.appendChild(notification);
+                                setTimeout(() => { try { notification.remove(); } catch (_) {} }, 6000);
+                            }
+                        });
+                    } else if (selectedText) {
+                        // Fallback alert
+                        chrome.scripting.executeScript({
+                            target: { tabId: validTab.id },
+                            func: (text) => { alert(`TabOracle – Summarize Selection\n\nSelected: ${text.substring(0, 200)}...`); },
+                            args: [selectedText]
+                        });
+                    }
+                } else {
+                    console.log('✅ TabOracle: Summarize Selection message sent');
+                }
+            });
+        } catch (error) {
+            console.error('❌ TabOracle: Error handling Summarize Selection:', error);
+        }
+    } else if (info.menuItemId === 'explainMe') {
         try {
             const rawUrl = info.pageUrl || (tab && tab.url) || '';
             console.log('🔍 TabOracle: Explain Me requested. Page URL:', rawUrl);
@@ -1782,6 +1857,16 @@ function ensureContextMenu() {
                 contextMenuCreating = false;
             } else {
                 console.log('✅ TabOracle: Context menu created successfully');
+                // Also add Summarize Selection
+                try {
+                    chrome.contextMenus.create({
+                        id: 'summarizeSelection',
+                        title: 'Summarize selection (TabOracle)',
+                        contexts: ['selection']
+                    });
+                } catch (e) {
+                    console.warn('⚠️ TabOracle: Failed to add Summarize Selection menu', e);
+                }
                 contextMenuCreated = true;
                 contextMenuCreating = false;
             }

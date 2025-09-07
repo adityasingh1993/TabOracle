@@ -1330,7 +1330,7 @@ IMPORTANT:
         }, 100);
     }
 
-    // Message listener for Explain Me feature
+    // Message listener for Explain Me and Summarize Selection features
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('🔍 TabOracle: Message received:', message);
         console.log('🔍 TabOracle: Sender:', sender);
@@ -1411,6 +1411,46 @@ IMPORTANT:
                 }
             } catch (error) {
                 console.error('❌ TabOracle: Error processing Explain Me request:', error);
+                sendResponse({ success: false, error: error.message });
+            }
+        } else if (message.action === 'showSummarizeSelection') {
+            try {
+                const currentUrl = window.location.href;
+                const isRestrictedPage = currentUrl.startsWith('chrome://') || 
+                                       currentUrl.startsWith('about:') || 
+                                       currentUrl.startsWith('chrome-extension://') ||
+                                       currentUrl.startsWith('moz-extension://') ||
+                                       currentUrl.startsWith('edge://') ||
+                                       currentUrl.startsWith('brave://');
+                if (isRestrictedPage) {
+                    sendResponse({ success: false, error: 'Summarize not available on restricted pages', isRestrictedPage: true });
+                    return;
+                }
+
+                let selectedText = message.selectedText || '';
+                if (!selectedText || !selectedText.trim()) {
+                    selectedText = (window.getSelection && window.getSelection().toString()) || '';
+                }
+                if (selectedText) selectedText = selectedText.trim();
+
+                if (!selectedText && window.tabOraclePDFOverlay && typeof window.tabOraclePDFOverlay.getSelectedText === 'function') {
+                    selectedText = (window.tabOraclePDFOverlay.getSelectedText() || '').trim();
+                }
+
+                if (selectedText && selectedText.length > 0) {
+                    // Reuse floating button summarize UI to show a summary of selection
+                    try {
+                        // Create lightweight summary panel if not present
+                        const evt = new CustomEvent('taboracle:summarize-selection', { detail: { text: selectedText } });
+                        window.dispatchEvent(evt);
+                        sendResponse({ success: true, textLength: selectedText.length });
+                    } catch (e) {
+                        sendResponse({ success: false, error: e.message });
+                    }
+                } else {
+                    sendResponse({ success: false, error: 'No text selected' });
+                }
+            } catch (error) {
                 sendResponse({ success: false, error: error.message });
             }
         } else if (message.action === 'test') {
