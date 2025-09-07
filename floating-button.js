@@ -26,6 +26,10 @@
 						<span class="btn-icon">🔎</span>
 						<span class="btn-label">Search Tabs</span>
 					</button>
+					<button class="taboracle-hover-btn askpage-btn" title="Ask Page">
+						<span class="btn-icon">❓</span>
+						<span class="btn-label">Ask Page</span>
+					</button>
 				</div>
 			`;
 
@@ -106,6 +110,43 @@
 			document.body.appendChild(summaryOverlay);
 
 			setupFloatingButtonEvents(floatingBtn, summaryPanel);
+			// Create Ask Page chat overlay and panel
+			const chatOverlay = document.createElement('div');
+			chatOverlay.id = 'taboracle-chat-overlay';
+			chatOverlay.style.cssText = `
+				position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: none; background: transparent; z-index: 2147483646; pointer-events: none;
+			`;
+			const chatPanel = document.createElement('div');
+			chatPanel.id = 'taboracle-chat-panel';
+			chatPanel.style.cssText = `pointer-events: auto;`;
+			chatPanel.innerHTML = `
+				<div class="chat-panel-header">
+					<div class="chat-header-left">
+						<img src="${chrome.runtime.getURL('taboracle_combined.svg')}" alt="TabOracle" class="chat-brand" onerror="this.style.display='none'" />
+					</div>
+					<div class="chat-header-center">
+						<span class="panel-title">Ask Page</span>
+					</div>
+					<div class="chat-header-right">
+						<button class="close-chat-btn" title="Close">✕</button>
+					</div>
+				</div>
+				<div class="chat-panel-body">
+					<div class="chat-messages" id="taboracle-chat-messages"></div>
+					<div class="chat-input-row">
+						<input id="taboracle-chat-input" type="text" placeholder="Ask about this page…" />
+						<button id="taboracle-chat-send" class="send-btn">Send</button>
+					</div>
+					<div class="chat-footer">
+						<button id="taboracle-chat-review" class="review-btn">⭐ Leave a Review</button>
+						<button id="taboracle-chat-support" class="support-btn">☕ Support TabOracle</button>
+					</div>
+				</div>
+			`;
+			chatOverlay.appendChild(chatPanel);
+			document.body.appendChild(chatOverlay);
+
+			bindChatEvents(chatOverlay, chatPanel);
 			addFloatingButtonStyles();
 		} catch (e) {
 			console.error('TabOracle: Failed to create floating button', e);
@@ -121,6 +162,7 @@
 		const hoverButtons = floatingBtn.querySelector('.taboracle-hover-buttons');
 		const summarizeBtn = floatingBtn.querySelector('.summarize-btn');
 		const searchTabsBtn = floatingBtn.querySelector('.searchtabs-btn');
+		const askPageBtn = floatingBtn.querySelector('.askpage-btn');
 		const closePanelBtn = summaryPanel.querySelector('.close-panel-btn');
 		const pinPanelBtn = summaryPanel.querySelector('.pin-panel-btn');
 
@@ -148,6 +190,14 @@
 				await new Promise((resolve) => {
 					try { chrome.runtime.sendMessage({ action: 'openMainPopup' }, () => resolve()); } catch (_) { resolve(); }
 				});
+			} catch (_) {}
+		});
+
+		askPageBtn.addEventListener('click', (e) => {
+			e.preventDefault(); e.stopPropagation();
+			try {
+				const evt = new CustomEvent('taboracle:ask-page', { detail: {} });
+				window.dispatchEvent(evt);
 			} catch (_) {}
 		});
 		closePanelBtn.addEventListener('click', () => {
@@ -426,7 +476,7 @@
 		const style = document.createElement('style');
 		style.id = 'taboracle-floating-styles';
 		style.textContent = `
-			#taboracle-floating-btn { position: fixed; bottom: 30px; right: 30px; z-index: 2147483647; display: flex; flex-direction: column; align-items: flex-end; transition: all 0.3s ease; }
+			#taboracle-floating-btn { position: fixed; bottom: 30px; right: 30px; z-index: 2147483647; display: flex; flex-direction: column; align-items: flex-end; transition: all 0.3s ease; pointer-events: auto; }
 			.taboracle-main-btn { width: 72px; height: 72px; background: transparent; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: none; transition: all 0.3s ease; position: relative; z-index: 2147483647; }
 			.taboracle-main-btn:hover { transform: scale(1.06); }
 			.taboracle-icon { width: 72px; height: 72px; object-fit: contain; display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)) drop-shadow(0 0 1px rgba(0,0,0,0.45)); }
@@ -462,6 +512,28 @@
 			.summary-actions { margin-top: 16px; display: flex; gap: 8px; }
 			.summary-actions .review-btn { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer; }
 			.summary-actions .support-btn { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; border-radius: 8px; padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer; }
+
+			/* Chat styles */
+			.chat-panel-header { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 20px; border-top-right-radius: 20px; height: 44px; box-sizing: border-box; }
+			.chat-header-left { display: flex; align-items: center; gap: 8px; }
+			.chat-brand { width: 100px; height: 32px; filter: drop-shadow(0 1px 3px rgba(251,191,36,0.3)); }
+			.chat-header-center { display: flex; align-items: center; justify-content: center; flex: 1; }
+			.chat-header-right { display: flex; align-items: center; gap: 6px; }
+			.close-chat-btn { background: none; border: none; color: white; font-weight: 700; cursor: pointer; font-size: 14px; }
+			#taboracle-chat-panel { position: fixed; top: 20px; right: 20px; bottom: 120px; width: 420px; max-width: 46vw; background: linear-gradient(180deg, #6d28d9 0px, #6d28d9 44px, rgba(255,255,255,0.98) 44px); border: 0; background-clip: padding-box; border-radius: 16px; box-shadow: 0 20px 40px rgba(139, 92, 246, 0.28), 0 8px 32px rgba(0,0,0,0.18); z-index: 2147483645; display: none; flex-direction: column; overflow: hidden; pointer-events: auto; }
+			.chat-panel-body { display: flex; flex-direction: column; gap: 12px; padding: 16px; height: calc(100% - 44px); }
+			.chat-messages { flex: 1 1 auto; min-height: 0; overflow-y: auto; background: rgba(255,255,255,0.92); border: 1px solid rgba(139, 92, 246, 0.12); border-radius: 12px; padding: 12px; }
+			.chat-msg { margin-bottom: 10px; }
+			.chat-msg.user { text-align: right; }
+			.chat-msg .bubble { display: inline-block; padding: 10px 12px; border-radius: 12px; max-width: 80%; }
+			.chat-msg.user .bubble { background: #eef2ff; color: #1f2937; }
+			.chat-msg.ai .bubble { background: #f8fafc; color: #111827; border: 1px solid rgba(17,24,39,0.08); }
+			.chat-input-row { display: flex; gap: 8px; }
+			#taboracle-chat-input { flex: 1; background: #ffffff; border: 1px solid rgba(17,24,39,0.15); border-radius: 10px; padding: 10px 12px; font-size: 14px; outline: none; }
+			#taboracle-chat-send { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; border-radius: 10px; padding: 10px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
+			.chat-footer { margin-top: 8px; display: flex; gap: 8px; justify-content: flex-end; }
+			.chat-footer .review-btn { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; border-radius: 10px; padding: 8px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+			.chat-footer .support-btn { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; border-radius: 10px; padding: 8px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
 		`;
 		document.head.appendChild(style);
 	}
@@ -504,6 +576,92 @@
 			try { panel.classList.remove('pinned'); } catch (_) {}
 			panel.style.boxShadow = '0 20px 40px rgba(139, 92, 246, 0.3), 0 8px 32px rgba(0,0,0,0.2)';
 		}
+	}
+
+	// Local helper: extract visible page text as context for Ask Page
+	function extractVisibleText() {
+		try {
+			const clone = document.body.cloneNode(true);
+			try { clone.querySelectorAll('script,style,noscript,nav,header,footer,aside').forEach(el => el.remove()); } catch (_) {}
+			const text = clone.textContent || clone.innerText || '';
+			return text.replace(/\s+/g, ' ').trim();
+		} catch (_) { return document.body ? (document.body.innerText || '').replace(/\s+/g, ' ').trim() : ''; }
+	}
+
+	function bindChatEvents(chatOverlay, chatPanel) {
+		try {
+			const closeBtn = chatPanel.querySelector('.close-chat-btn');
+			const input = chatPanel.querySelector('#taboracle-chat-input');
+			const send = chatPanel.querySelector('#taboracle-chat-send');
+			const messages = chatPanel.querySelector('#taboracle-chat-messages');
+			const reviewBtn = chatPanel.querySelector('#taboracle-chat-review');
+			const supportBtn = chatPanel.querySelector('#taboracle-chat-support');
+
+			function show() { chatOverlay.style.display = 'flex'; }
+			function hide() { chatOverlay.style.display = 'none'; }
+			closeBtn.addEventListener('click', hide);
+			chatOverlay.addEventListener('click', (e) => { if (e.target === chatOverlay) hide(); });
+			window.addEventListener('taboracle:ask-page', () => { chatPanel.style.display = 'flex'; show(); try { input.focus(); } catch (_) {} });
+
+			async function sendQuestion() {
+				const q = (input.value || '').trim();
+				if (!q) return;
+				appendMsg('user', q);
+				input.value = '';
+				appendMsg('ai', 'Thinking…');
+				try {
+					let ctx = '';
+					try {
+						const isPDFPage = (window.location.href.toLowerCase().includes('.pdf') || document.contentType === 'application/pdf');
+						if (isPDFPage && typeof extractPDFText === 'function') {
+							ctx = await extractPDFText();
+						}
+					} catch (_) {}
+					if (!ctx) ctx = extractVisibleText();
+					const resp = await new Promise((resolve, reject) => {
+						try { chrome.runtime.sendMessage({ action: 'askPageAnswer', question: q, context: ctx }, (r) => {
+							const le = chrome.runtime.lastError; if (le) { reject(new Error(le.message)); return; }
+							resolve(r);
+						}); } catch (e) { reject(e); }
+					});
+					const text = (resp && resp.success && resp.text) ? resp.text : 'I don’t know.';
+					replaceLastAi(text);
+				} catch (e) {
+					replaceLastAi('⚠️ Failed: ' + (e && e.message ? e.message : 'Unknown error'));
+				}
+			}
+
+			function appendMsg(role, text) {
+				const div = document.createElement('div');
+				div.className = 'chat-msg ' + role;
+				const b = document.createElement('div');
+				b.className = 'bubble';
+				b.textContent = text;
+				div.appendChild(b);
+				messages.appendChild(div);
+				messages.scrollTop = messages.scrollHeight;
+			}
+			function replaceLastAi(text) {
+				for (let i = messages.children.length - 1; i >= 0; i--) {
+					const c = messages.children[i];
+					if (c.classList.contains('ai')) { c.querySelector('.bubble').textContent = text; return; }
+				}
+			}
+
+			send.addEventListener('click', sendQuestion);
+			input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendQuestion(); });
+			reviewBtn?.addEventListener('click', () => {
+				try {
+					const extensionId = chrome.runtime.id;
+					const reviewUrl = `https://chrome.google.com/webstore/detail/${extensionId}/reviews`;
+					chrome.tabs.create({ url: reviewUrl });
+				} catch (_) { try { window.open('https://chrome.google.com/webstore', '_blank'); } catch (_) {} }
+			});
+			supportBtn?.addEventListener('click', () => {
+				const supportUrl = 'https://buymeacoffee.com/adityas';
+				try { chrome.tabs.create({ url: supportUrl }); } catch (_) { try { window.open(supportUrl, '_blank'); } catch (_) {} }
+			});
+		} catch (_) {}
 	}
 
     // Listen for Summarize Selection requests from content script

@@ -2039,6 +2039,7 @@ IMPORTANT:
             summarizeBtn.style.cssText = btnStyle.replace('#8b5cf6', '#10b981').replace('#7c3aed', '#059669');
             toolbar.appendChild(explainBtn);
             toolbar.appendChild(summarizeBtn);
+            // Ask Page removed from selection toolbar
             document.body.appendChild(toolbar);
 
             explainBtn.addEventListener('click', () => {
@@ -2062,6 +2063,8 @@ IMPORTANT:
                 } catch (_) {}
                 hideToolbar();
             });
+
+            // Ask Page click handler removed
 
             return toolbar;
         }
@@ -2108,6 +2111,125 @@ IMPORTANT:
         });
         document.addEventListener('scroll', () => hideToolbar(), { passive: true });
     })();
+
+    // ===== Simple per-page RAG (TF-IDF based, no heavy models) =====
+    async function ragAnswerQuestion(question) {
+        const { index, chunks } = await getOrBuildPageIndex();
+        const qVec = tfidfVectorize(question, index.idf);
+        const scored = index.vectors.map((v, i) => ({ i, score: cosineSimilarity(qVec, v.vec, v.norm) }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 3);
+        const context = scored.map(s => `Excerpt ${s.i + 1} (relevance ${s.score.toFixed(2)}):\n${chunks[s.i]}`).join('\n\n');
+        const prompt = `Use only the following context to answer the question. If unsure, say you don't know.\n\n${context}\n\nQuestion: ${question}\n\nAnswer:`;
+        try {
+            const resp = await new Promise((resolve, reject) => {
+                try {
+                    chrome.runtime.sendMessage({ action: 'generateAISummary', prompt }, (r) => {
+                        const le = chrome.runtime.lastError;
+                        if (le) { reject(new Error(le.message)); return; }
+                        resolve(r);
+                    });
+                } catch (e) { reject(e); }
+            });
+            if (resp && resp.success && resp.summary) return resp.summary;
+        } catch (_) {}
+        // Fallback: return top excerpt
+        return (chunks[scored[0]?.i] || '').slice(0, 600);
+    }
+
+    function tokenize(text) {
+        return String(text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+    }
+    function buildChunksFromPage() {
+        const text = extractVisibleText();
+        const maxLen = 800, overlap = 120;
+        const chunks = [];
+        for (let i = 0; i < text.length; i += (maxLen - overlap)) {
+            chunks.push(text.slice(i, i + maxLen));
+            if (i + maxLen >= text.length) break;
+        }
+        return chunks;
+    }
+    function buildTfidfIndex(chunks) {
+        const docs = chunks.map(c => tokenize(c));
+        const df = new Map();
+        docs.forEach(doc => {
+            const seen = new Set();
+            doc.forEach(t => { if (!seen.has(t)) { df.set(t, (df.get(t) || 0) + 1); seen.add(t); } });
+        });
+        const N = docs.length;
+        const idf = new Map();
+        for (const [t, d] of df.entries()) idf.set(t, Math.log((N + 1) / (d + 1)) + 1);
+        const vectors = docs.map(doc => {
+            const tf = new Map();
+            doc.forEach(t => tf.set(t, (tf.get(t) || 0) + 1));
+            // tf-idf vec
+            const vec = new Map();
+            let normSq = 0;
+            for (const [t, f] of tf.entries()) {
+                const w = (f / doc.length) * (idf.get(t) || 0);
+                if (w > 0) { vec.set(t, w); normSq += w * w; }
+            }
+            return { vec, norm: Math.sqrt(normSq) || 1 };
+        });
+        return { idf, vectors };
+    }
+    function tfidfVectorize(text, idf) {
+        const doc = tokenize(text);
+        const tf = new Map();
+        doc.forEach(t => tf.set(t, (tf.get(t) || 0) + 1));
+        const vec = new Map();
+        let normSq = 0;
+        for (const [t, f] of tf.entries()) {
+            const w = (f / doc.length) * (idf.get(t) || 0);
+            if (w > 0) { vec.set(t, w); normSq += w * w; }
+        }
+        return { vec, norm: Math.sqrt(normSq) || 1 };
+    }
+    function cosineSimilarity(q, dVec, dNorm) {
+        let dot = 0;
+        for (const [t, w] of q.vec.entries()) {
+            const dv = dVec.get(t) || 0;
+            if (dv) dot += w * dv;
+        }
+        const denom = (q.norm || 1) * (dNorm || 1);
+        return denom ? (dot / denom) : 0;
+    }
+    async function getOrBuildPageIndex() {
+        const key = window.location.href;
+        if (!window.__taboracleRag) window.__taboracleRag = new Map();
+        if (window.__taboracleRag.has(key)) return window.__taboracleRag.get(key);
+        const chunks = buildChunksFromPage();
+        const index = buildTfidfIndex(chunks);
+        const value = { index, chunks };
+        window.__taboracleRag.set(key, value);
+        return value;
+    }
+    function extractVisibleText() {
+        const clone = document.body.cloneNode(true);
+        try { clone.querySelectorAll('script,style,noscript,nav,header,footer,aside').forEach(el => el.remove()); } catch (_) {}
+        const text = clone.textContent || clone.innerText || '';
+        return text.replace(/\s+/g, ' ').trim();
+    }
+    // promptAskInputNear removed
+    function showAnswerBubbleNear(anchorEl, message) {
+        try {
+            const existing = document.getElementById('taboracle-answer'); if (existing) existing.remove();
+            const box = document.createElement('div'); box.id = 'taboracle-answer';
+            box.style.cssText = 'position:fixed;max-width:560px;z-index:2147483647;padding:12px 14px;background:#ffffff;border:1px solid rgba(17,24,39,0.1);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.25);color:#111827;font-family:system-ui,-apple-system,Segoe UI,Roboto;line-height:1.5;';
+            box.textContent = message;
+            document.body.appendChild(box);
+            const rect = anchorEl.getBoundingClientRect();
+            box.style.left = Math.max(8, Math.min(window.innerWidth - 8 - box.offsetWidth, rect.left)) + 'px';
+            box.style.top = Math.min(window.innerHeight - 8 - box.offsetHeight, rect.bottom + 8) + 'px';
+            setTimeout(() => { try { box.remove(); } catch (_) {} }, 8000);
+        } catch (_) {}
+    }
+
+    // Floating button Ask Page trigger
+    try {
+        // Ask Page now opens chat via floating button; inline askbar removed
+    } catch (_) {}
     
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {

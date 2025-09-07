@@ -513,6 +513,58 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 }
             })();
             return true; // Keep message channel open for async response
+        } else if (message.action === 'askPageAnswer') {
+            (async () => {
+                try {
+                    const { question, context } = message;
+                    if (!question) {
+                        sendResponse({ success: false, error: 'No question provided' });
+                        return;
+                    }
+                    const safeContext = String(context || '').slice(0, 15000);
+                    const prompt = `Use ONLY the provided page content to answer the question. If the answer is not present, say exactly: "I don't know."\n\nPAGE CONTENT:\n${safeContext}\n\nQUESTION: ${question}\n\nANSWER:`;
+
+                    let text = '';
+                    // Try Chrome Language Model
+                    if (typeof chrome !== 'undefined' && chrome.languageModel && chrome.languageModel.create) {
+                        try {
+                            const lm = await chrome.languageModel.create();
+                            const resp = await lm.prompt(prompt);
+                            text = typeof resp === 'string' ? resp : ((resp && resp.text) || (resp && resp.response) || '');
+                        } catch (e) {
+                            console.warn('⚠️ askPageAnswer: chrome.languageModel failed:', e);
+                        }
+                    }
+                    // Try global LanguageModel if available
+                    if (!text && typeof LanguageModel !== 'undefined' && LanguageModel.create) {
+                        try {
+                            const lm = await LanguageModel.create();
+                            const resp = await lm.prompt(prompt);
+                            text = typeof resp === 'string' ? resp : ((resp && resp.text) || (resp && resp.response) || '');
+                        } catch (e) {
+                            console.warn('⚠️ askPageAnswer: global LanguageModel failed:', e);
+                        }
+                    }
+                    // Fallback heuristic: return best-matching sentences from context
+                    if (!text) {
+                        try {
+                            const qTokens = String(question).toLowerCase().split(/\W+/).filter(Boolean);
+                            const sents = String(safeContext).split(/(?<=[.!?])\s+/);
+                            const scored = sents.map((s) => {
+                                const lower = s.toLowerCase();
+                                let score = 0;
+                                qTokens.forEach(t => { if (lower.includes(t)) score += 1; });
+                                return { s, score };
+                            }).sort((a,b) => b.score - a.score).slice(0, 3).map(x => x.s).join(' ');
+                            text = scored || "I don't know.";
+                        } catch (_) { text = "I don't know."; }
+                    }
+                    sendResponse({ success: true, text: String(text).trim() });
+                } catch (error) {
+                    sendResponse({ success: false, error: error.message });
+                }
+            })();
+            return true;
         } else if (message.action === 'extractPdfText') {
             console.log('🔍 TabOracle: Called extractPdfText Acton');
             // Handle PDF text extraction for floating button
