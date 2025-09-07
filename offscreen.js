@@ -38,24 +38,30 @@ async function extractPdfTextFromData(arrayBuffer) {
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  (async () => {
-    try {
-      if (msg && msg.action === 'offscreenParsePdf' && msg.url) {
+  // Handle only offscreen-specific actions; ignore everything else so other contexts can respond
+  if (msg && msg.action === 'offscreenParsePdf' && msg.url) {
+    (async () => {
+      try {
         const text = await extractPdfText(msg.url);
         sendResponse({ success: true, content: text, contentLength: text.length });
-        return;
+      } catch (e) {
+        sendResponse({ success: false, error: e.message });
       }
-      if (msg && msg.action === 'offscreenParsePdfData' && msg.data) {
+    })();
+    return true; // async response
+  }
+  if (msg && msg.action === 'offscreenParsePdfData' && msg.data) {
+    (async () => {
+      try {
         const text = await extractPdfTextFromData(msg.data);
         sendResponse({ success: true, content: text, contentLength: text.length });
-        return;
+      } catch (e) {
+        sendResponse({ success: false, error: e.message });
       }
-      sendResponse({ success: false, error: 'Unknown action' });
-    } catch (e) {
-      sendResponse({ success: false, error: e.message });
-    }
-  })();
-  return true;
+    })();
+    return true; // async response
+  }
+  return false; // not handled here
 });
 
 

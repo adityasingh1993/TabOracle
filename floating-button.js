@@ -86,6 +86,9 @@
 		}
 	}
 
+	// Prevent overlapping summarize runs that can race the background messaging
+	let summarizeInProgress = false;
+
 	function setupFloatingButtonEvents(floatingBtn, summaryPanel) {
 		const mainBtn = floatingBtn.querySelector('.taboracle-main-btn');
 		const hoverButtons = floatingBtn.querySelector('.taboracle-hover-buttons');
@@ -136,6 +139,12 @@
 	}
 
 	async function handleSummarizeMe(summaryPanel) {
+		console.log('TabOracle: Handling Summarize Me');
+		if (summarizeInProgress) {
+			console.log('TabOracle: Summarize already in progress, ignoring click');
+			return;
+		}
+		summarizeInProgress = true;
 		const loadingEl = summaryPanel.querySelector('.summary-loading');
 		const contentEl = summaryPanel.querySelector('.summary-content');
 		try {
@@ -144,14 +153,20 @@
 			contentEl.innerHTML = '';
 
 			const isPDFPage = window.location.href.toLowerCase().includes('.pdf') || document.contentType === 'application/pdf';
+			console.log('TabOracle: PDF page:', isPDFPage);
 			let pageContent = '';
 			const pageTitle = document.title || 'Untitled Page';
-
+			console.log('TabOracle: Page titlesss:', pageTitle);
+			console.log("====isPDFPage:");
 			if (isPDFPage) {
+				console.log("====calling pdf extarct function");
 				pageContent = await extractPDFText();
+				console.log("=====pageContent:", pageContent);
 			} else {
+				console.log("====calling page content function")
 				pageContent = extractPageContent();
 			}
+			console.log("if else executed", pageContent);
 			if (!pageContent || pageContent.trim().length < 50) throw new Error('Insufficient content to summarize');
 
 			const summary = await generateAISummary(pageTitle, pageContent);
@@ -168,7 +183,7 @@
 				${summary.keyPoints && summary.keyPoints.length ? `
 					<div class="summary-key-points">
 						<h4>Key Points:</h4>
-						<ul>${summary.keyPoints.map(p => `<li>${escapeHtml(String(p))}</li>`).join('')}</ul>
+						<ul>${summary.keyPoints.map(p => '<li>' + escapeHtml(String(p)) + '</li>').join('')}</ul>
 					</div>
 				` : ''}
 				<div class="summary-disclaimer">⚠️ AI-generated summary. Verify important information.</div>
@@ -183,40 +198,92 @@
 					<div class="error-details">${escapeHtml(err.message || 'Unknown error')}</div>
 				</div>
 			`;
+		} finally {
+			summarizeInProgress = false;
 		}
 	}
 
 	async function extractPDFText() {
 		try {
-			// Prefer overlay full text if available
-			if (window.tabOraclePDFOverlay && typeof window.tabOraclePDFOverlay.getFullText === 'function') {
-				const t = await window.tabOraclePDFOverlay.getFullText();
-				if (t && t.trim()) return t;
-			}
+			// Summarizer path: skip PDF text-layer overlay; use background/offscreen first, then local pdf.js fallback
 
 			// Detect effective PDF URL (embedded iframe/embed or Chrome PDF viewer)
 			let effectiveUrl = window.location.href;
+			console.log('TabOracle: Effective URL in extractPDFText:', effectiveUrl);
 			try {
 				// Embedded PDF elements
 				const iframe = document.querySelector('iframe[src*=".pdf"], iframe[type="application/pdf"]');
+				console.log('TabOracle: Iframe:', iframe);
 				const embed = document.querySelector('embed[src*=".pdf"], embed[type="application/pdf"]');
-				if (iframe && iframe.src) effectiveUrl = iframe.src;
-				else if (embed && embed.src) effectiveUrl = embed.src;
+				console.log('TabOracle: Embed:', embed);
+				// if (iframe && iframe.src) effectiveUrl = iframe.src;
+				// else if (embed && embed.src) effectiveUrl = embed.src;
 
 				// Chrome built-in PDF viewer (src/file param)
+				console.log('TabOracle: Effective URL just before url:', effectiveUrl);
 				const u = new URL(effectiveUrl);
+				console.log('TabOracle: URL:', u);
 				if (u.protocol === 'chrome-extension:' && /mhjfbmdgcfjbbpaeojofohoefgiehjai/i.test(u.host)) {
+					console.log('TabOracle: Chrome extrnsion');
 					const paramSrc = u.searchParams.get('src') || u.searchParams.get('file');
 					if (paramSrc) {
 						try { effectiveUrl = decodeURIComponent(paramSrc); } catch (_) { effectiveUrl = paramSrc; }
 					}
 				}
-			} catch (_) {}
+			} catch (_) {console.log('TabOracle: Error in extractPDFText:', _);}
 
-			// Ask background to parse
-			const resp = await chrome.runtime.sendMessage({ action: 'extractPdfText', url: effectiveUrl });
-			if (resp && resp.success && resp.text) return resp.text;
-			throw new Error(resp?.error || 'Failed to extract PDF text');
+			// Ask background to parse (safe messaging with lastError handling)
+			try {
+				const resp = await new Promise((resolve, reject) => {
+					try {
+						console.log('TabOracle: Extracting PDF text from', effectiveUrl);
+						console.log("sending message to background", effectiveUrl);
+						chrome.runtime.sendMessage({ action: 'extractPdfText', url: effectiveUrl }, (r) => {
+							console.log("message sent to background");
+							const le = chrome.runtime.lastError;
+							console.log("lastError:", le);
+							if (le) { reject(new Error(le.message)); return; }
+							resolve(r);
+						});
+					} catch (e) {
+						console.log("error in extractPDFText:", e);
+						reject(e);
+					}
+				});
+				console.log("=====resp:", resp);
+				if (resp && resp.success && resp.text) return resp.text;
+				throw new Error(resp && resp.error ? resp.error : 'Failed to extract PDF via background');
+			} catch (bgErr) {
+				// Fallback: parse locally with pdf.js
+				await ensurePdfJsLoaded();
+				if (typeof pdfjsLib === 'undefined') throw bgErr;
+				try {
+					try { pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('vendor/pdfjs/pdf.worker.min.js'); } catch (_) {}
+					let doc = null;
+					try {
+						// Try direct URL first
+						const loadingTask = pdfjsLib.getDocument({ url: effectiveUrl, withCredentials: true });
+						doc = await loadingTask.promise;
+					} catch (_) {
+						// Fallback to fetch as ArrayBuffer
+						const r = await fetch(effectiveUrl, { credentials: 'include', mode: 'cors' });
+						if (!r.ok) throw new Error('HTTP ' + r.status);
+						const buf = await r.arrayBuffer();
+						const loadingTask2 = pdfjsLib.getDocument({ data: buf });
+						doc = await loadingTask2.promise;
+					}
+					let text = '';
+					const maxPages = Math.min(doc.numPages || 0, 30);
+					for (let i = 1; i <= maxPages; i++) {
+						const page = await doc.getPage(i);
+						const content = await page.getTextContent();
+						text += content.items.map(it => it.str).join(' ') + '\n\n';
+					}
+					return text.replace(/\s+/g, ' ').trim();
+				} catch (_) {
+					throw bgErr; // surface original background error if local fallback also fails
+				}
+			}
 		} catch (e) {
 			throw e;
 		}
@@ -234,15 +301,27 @@
 
 	async function generateAISummary(title, content) {
 		const prompt = `Please provide a comprehensive summary of the following content:\n\nTitle: ${title}\n\nContent: ${content.substring(0, 8000)}${content.length > 8000 ? '...' : ''}\n\nPlease provide:\n1. A concise summary (2-3 sentences)\n2. 3-5 key points\n3. Word count\n4. Estimated reading time\n\nFormat the response as JSON:\n{\n  "summary": "Brief summary here",\n  "keyPoints": ["Point 1", "Point 2", "Point 3"],\n  "wordCount": 1234,\n  "readingTime": "5 minutes"\n}`;
-		const resp = await chrome.runtime.sendMessage({ action: 'generateAISummary', prompt });
-		if (resp && resp.success) {
-			return {
-				summary: resp.summary,
-				keyPoints: resp.keyPoints || [],
-				wordCount: resp.wordCount || content.split(/\s+/).length,
-				readingTime: resp.readingTime || `${Math.ceil(content.split(/\s+/).length / 200)} minutes`
-			};
-		}
+		try {
+			const resp = await new Promise((resolve, reject) => {
+				try {
+					chrome.runtime.sendMessage({ action: 'generateAISummary', prompt }, (r) => {
+						const le = chrome.runtime.lastError;
+						if (le) { reject(new Error(le.message)); return; }
+						resolve(r);
+					});
+				} catch (e) {
+					reject(e);
+				}
+			});
+			if (resp && resp.success) {
+				return {
+					summary: resp.summary,
+					keyPoints: resp.keyPoints || [],
+					wordCount: resp.wordCount || content.split(/\s+/).length,
+					readingTime: resp.readingTime || `${Math.ceil(content.split(/\s+/).length / 200)} minutes`
+				};
+			}
+		} catch (_) {}
 		// Fallback simple summary
 		const words = content.split(/\s+/);
 		const wordCount = words.length;
@@ -250,6 +329,26 @@
 		const summary = (sentences.slice(0, 3).join(' ').trim()) || `This page titled "${title}" contains ${wordCount} words.`;
 		const keyPoints = sentences.slice(3, 8).map(s => s.trim().substring(0, 100) + '...');
 		return { summary, keyPoints, wordCount, readingTime: `${Math.ceil(wordCount / 200)} minutes` };
+	}
+
+	// Helper to ensure pdf.js is available locally in the page
+	async function ensurePdfJsLoaded() {
+		if (typeof pdfjsLib !== 'undefined') return true;
+		try {
+			await new Promise((resolve, reject) => {
+				const s = document.createElement('script');
+				s.src = chrome.runtime.getURL('vendor/pdfjs/pdf.min.js');
+				s.onload = resolve;
+				s.onerror = () => reject(new Error('Failed to load pdf.js'));
+				document.head.appendChild(s);
+				setTimeout(resolve, 2000);
+			});
+			if (typeof pdfjsLib !== 'undefined') {
+				try { pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('vendor/pdfjs/pdf.worker.min.js'); } catch (_) {}
+				return true;
+			}
+		} catch (_) {}
+		return false;
 	}
 
 	function makePanelDraggable(panel) {

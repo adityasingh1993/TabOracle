@@ -215,9 +215,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         (async () => {
             try {
                 console.log('🔍 TabOracle: fetchPdfAsData for URL:', message.url);
-                const resp = await fetch(message.url, { credentials: 'include', mode: 'cors' });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const buf = await resp.arrayBuffer();
+                const buf = await fetchArrayBufferViaXHR(message.url);
                 // Send as transferable to avoid cloning cost
                 sendResponse({ success: true, data: buf }, [buf]);
             } catch (e) {
@@ -501,6 +499,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             })();
             return true; // Keep message channel open for async response
         } else if (message.action === 'extractPdfText') {
+            console.log('🔍 TabOracle: Called extractPdfText Acton');
             // Handle PDF text extraction for floating button
             (async () => {
                 try {
@@ -579,9 +578,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                         
                         // Fallback: try direct fetch and parsing
                         try {
-                            const resp = await fetch(url, { credentials: 'include', mode: 'cors' });
-                            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                            const buf = await resp.arrayBuffer();
+                            const buf = await fetchArrayBufferViaXHR(url);
                             
                             // Ensure offscreen exists again (if it crashed)
                             await ensureOffscreen();
@@ -1949,3 +1946,28 @@ setTimeout(debugTabState, 8000);
 console.log('✅ TabOracle: Background script loaded successfully with all features');
 
 // (Removed experimental simple context menu creation and delayed test)
+
+// ===== NETWORK HELPERS =====
+async function fetchArrayBufferViaXHR(url) {
+    return new Promise((resolve, reject) => {
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.responseType = 'arraybuffer';
+            xhr.withCredentials = true;
+            xhr.onload = function () {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(xhr.response);
+                } else {
+                    reject(new Error(`HTTP ${xhr.status}`));
+                }
+            };
+            xhr.onerror = function () { reject(new Error('Network error')); };
+            xhr.ontimeout = function () { reject(new Error('Network timeout')); };
+            xhr.timeout = 15000;
+            xhr.send();
+        } catch (e) {
+            reject(e);
+        }
+    });
+}
