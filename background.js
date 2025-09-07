@@ -1061,77 +1061,7 @@ function extractKeyTopics(content) {
     return sortedWords.join(', ');
 }
 
-// ===== CONTEXT MENU FOR "EXPLAIN ME" FEATURE =====
-function createExplainMeContextMenu() {
-    return new Promise((resolve, reject) => {
-        try {
-            console.log('🔍 TabOracle: Creating Explain Me context menu...');
-            
-            // Check if contextMenus API is available
-            if (!chrome.contextMenus || typeof chrome.contextMenus.create !== 'function') {
-                console.error('❌ TabOracle: contextMenus API not available');
-                reject(new Error('contextMenus API not available'));
-                return;
-            }
-            
-            // Create the context menu directly - no removal, just create
-            const menuOptions = {
-                id: 'explainMe',
-                title: 'Explain me TabOracle',
-                contexts: ['selection']
-            };
-            
-            console.log('🔍 TabOracle: Creating context menu with options:', menuOptions);
-            
-            chrome.contextMenus.create(menuOptions, () => {
-                if (chrome.runtime.lastError) {
-                    const msg = chrome.runtime.lastError.message || '';
-                    console.error('❌ TabOracle: Failed to create context menu:', chrome.runtime.lastError);
-                    reject(new Error(`Failed to create context menu: ${msg}`));
-                } else {
-                    console.log('✅ TabOracle: Explain Me context menu created successfully');
-                    contextMenuCreated = true;
-                    resolve();
-                }
-            });
-            
-        } catch (error) {
-            console.error('❌ TabOracle: Error in createExplainMeContextMenu:', error);
-            reject(error);
-        }
-    });
-}
-
-
-
-// Function to verify context menu creation
-function verifyContextMenuCreation() {
-    try {
-        console.log('🔍 TabOracle: Verifying context menu creation...');
-        
-        // Check if our context menu exists
-        try {
-            chrome.contextMenus.get('explainMe', (menu) => {
-                if (chrome.runtime.lastError) {
-                    console.log('❌ TabOracle: Menu explainMe does not exist');
-                    console.warn('⚠️ TabOracle: Context menu not found, attempting to recreate...');
-                    createExplainMeContextMenu().then(() => {
-                        console.log('✅ TabOracle: Context menu recreated successfully');
-                    }).catch((error) => {
-                        console.error('❌ TabOracle: Failed to recreate context menu:', error);
-                    });
-                } else {
-                    console.log('✅ TabOracle: Menu explainMe exists:', menu);
-                }
-            });
-        } catch (error) {
-            console.log('❌ TabOracle: Error checking menu explainMe:', error);
-        }
-        
-    } catch (error) {
-        console.error('❌ TabOracle: Error verifying context menu creation:', error);
-    }
-}
+// (Removed legacy context menu helpers to avoid duplicate/nested items)
 
 // ===== AI EXPLANATION HANDLING =====
 async function handleAIExplanationRequest(message, sender, sendResponse) {
@@ -1845,7 +1775,7 @@ function ensureContextMenu() {
     console.log('🔍 TabOracle: Creating context menu...');
     contextMenuCreating = true;
     chrome.contextMenus.removeAll(() => {
-        // Create the new menu after clearing any existing items
+        // Create only the Explain Me menu
         chrome.contextMenus.create({
             id: 'explainMe',
             title: 'Explain me TabOracle',
@@ -1856,17 +1786,7 @@ function ensureContextMenu() {
                 contextMenuCreated = false;
                 contextMenuCreating = false;
             } else {
-                console.log('✅ TabOracle: Context menu created successfully');
-                // Also add Summarize Selection
-                try {
-                    chrome.contextMenus.create({
-                        id: 'summarizeSelection',
-                        title: 'Summarize selection (TabOracle)',
-                        contexts: ['selection']
-                    });
-                } catch (e) {
-                    console.warn('⚠️ TabOracle: Failed to add Summarize Selection menu', e);
-                }
+                console.log('✅ TabOracle: Explain Me context menu created');
                 contextMenuCreated = true;
                 contextMenuCreating = false;
             }
