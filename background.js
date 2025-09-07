@@ -1952,6 +1952,50 @@ console.log('✅ TabOracle: Background script loaded successfully with all featu
 
 // (Removed experimental simple context menu creation and delayed test)
 
+// ===== AUTO-ROUTE PDF PAGES TO OUR VIEWER (webNavigation-based, no blocking listeners) =====
+try {
+    chrome.webNavigation.onCommitted.addListener(async (details) => {
+        try {
+            if (details.frameId !== 0) return; // main frame only
+            const url = details.url || '';
+
+            // Skip our own viewer
+            const viewerPrefix = chrome.runtime.getURL('pdf-viewer.html');
+            if (url.startsWith(viewerPrefix)) return;
+
+            // Handle Chrome's built-in PDF viewer
+            if (url.startsWith('chrome-extension://')) {
+                try {
+                    const u = new URL(url);
+                    // Chromium built-in PDF viewer extension ID
+                    if (/mhjfbmdgcfjbbpaeojofohoefgiehjai/i.test(u.host)) {
+                        let src = u.searchParams.get('src') || u.searchParams.get('file');
+                        if (src) {
+                            try { src = decodeURIComponent(src); } catch (_) {}
+                            if (/\.pdf($|[?#])/i.test(src)) {
+                                const viewerUrl = `${viewerPrefix}?src=${encodeURIComponent(src)}`;
+                                await chrome.tabs.update(details.tabId, { url: viewerUrl });
+                            }
+                        }
+                    }
+                } catch (_) {}
+                return;
+            }
+
+            // Direct .pdf URLs
+            if (/\.pdf($|[?#])/i.test(url)) {
+                const viewerUrl = `${viewerPrefix}?src=${encodeURIComponent(url)}`;
+                await chrome.tabs.update(details.tabId, { url: viewerUrl });
+            }
+        } catch (e) {
+            console.warn('⚠️ TabOracle: PDF auto-route error:', e);
+        }
+    });
+    console.log('🔁 TabOracle: PDF auto-routing (webNavigation) enabled');
+} catch (e) {
+    console.warn('⚠️ TabOracle: Could not enable webNavigation auto-routing', e);
+}
+
 // ===== NETWORK HELPERS =====
 async function fetchArrayBufferViaXHR(url) {
     return new Promise((resolve, reject) => {

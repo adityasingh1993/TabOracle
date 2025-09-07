@@ -1994,6 +1994,120 @@ IMPORTANT:
             showSearch();
         }
     });
+
+    // ===== Mini selection toolbar (Explain / Summarize) =====
+    (function setupSelectionToolbar() {
+        let toolbar = null;
+        let hideTimeout = null;
+
+        function ensureToolbar() {
+            if (toolbar) return toolbar;
+            toolbar = document.createElement('div');
+            toolbar.id = 'taboracle-selection-toolbar';
+            toolbar.style.cssText = `
+                position: fixed;
+                z-index: 2147483646;
+                display: none;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 10px;
+                background: rgba(17, 24, 39, 0.92);
+                color: #fff;
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+                backdrop-filter: blur(8px);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                animation: slideIn 0.18s ease-out;
+            `;
+            const btnStyle = `
+                background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                border: none;
+                color: white;
+                border-radius: 8px;
+                padding: 6px 10px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                box-shadow: 0 2px 10px rgba(139,92,246,0.35);
+            `;
+            const explainBtn = document.createElement('button');
+            explainBtn.textContent = 'Explain';
+            explainBtn.style.cssText = btnStyle;
+            const summarizeBtn = document.createElement('button');
+            summarizeBtn.textContent = 'Summarize';
+            summarizeBtn.style.cssText = btnStyle.replace('#8b5cf6', '#10b981').replace('#7c3aed', '#059669');
+            toolbar.appendChild(explainBtn);
+            toolbar.appendChild(summarizeBtn);
+            document.body.appendChild(toolbar);
+
+            explainBtn.addEventListener('click', () => {
+                try {
+                    const text = (window.getSelection && window.getSelection().toString().trim()) || '';
+                    if (text && typeof showExplainMe === 'function') {
+                        showExplainMe(text);
+                    } else if (text) {
+                        try { chrome.runtime.sendMessage({ action: 'showExplainMe', selectedText: text }); } catch (_) {}
+                    }
+                } catch (_) {}
+                hideToolbar();
+            });
+            summarizeBtn.addEventListener('click', () => {
+                try {
+                    const text = (window.getSelection && window.getSelection().toString().trim()) || '';
+                    if (text) {
+                        const evt = new CustomEvent('taboracle:summarize-selection', { detail: { text } });
+                        window.dispatchEvent(evt);
+                    }
+                } catch (_) {}
+                hideToolbar();
+            });
+
+            return toolbar;
+        }
+
+        function hideToolbar() {
+            if (toolbar) toolbar.style.display = 'none';
+        }
+
+        function showToolbarAtClientPos(x, y) {
+            const tb = ensureToolbar();
+            // Place using client coordinates; offset after first paint
+            tb.style.left = Math.max(8, Math.min(window.innerWidth - 8, x)) + 'px';
+            tb.style.top = Math.max(8, y - 40) + 'px';
+            tb.style.display = 'flex';
+            // Adjust after rendering to center horizontally
+            requestAnimationFrame(() => {
+                try {
+                    tb.style.left = Math.max(8, Math.min(window.innerWidth - 8 - tb.offsetWidth, x - tb.offsetWidth / 2)) + 'px';
+                } catch (_) {}
+            });
+        }
+
+        function handleSelectionChange() {
+            try {
+                const sel = window.getSelection && window.getSelection();
+                const text = sel ? (sel.toString() || '').trim() : '';
+                if (!text) { hideToolbar(); return; }
+                const range = sel.rangeCount ? sel.getRangeAt(0) : null;
+                if (!range) { hideToolbar(); return; }
+                const rect = range.getBoundingClientRect();
+                const x = rect.left + rect.width / 2;
+                const y = rect.top; // client coords
+                showToolbarAtClientPos(x, y);
+                clearTimeout(hideTimeout);
+                hideTimeout = setTimeout(() => { hideToolbar(); }, 4000);
+            } catch (_) { hideToolbar(); }
+        }
+
+        document.addEventListener('mouseup', () => setTimeout(handleSelectionChange, 10));
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'Shift' || e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                setTimeout(handleSelectionChange, 10);
+            }
+        });
+        document.addEventListener('scroll', () => hideToolbar(), { passive: true });
+    })();
     
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {
