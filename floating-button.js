@@ -506,6 +506,61 @@
 		}
 	}
 
+    // Listen for Summarize Selection requests from content script
+    try {
+        window.addEventListener('taboracle:summarize-selection', async (ev) => {
+            try {
+                const detail = ev && ev.detail ? ev.detail : {};
+                const text = (detail.text || '').trim();
+                if (!text) return;
+                // Ensure UI exists
+                let overlay = document.getElementById('taboracle-summary-overlay');
+                let panel = document.getElementById('taboracle-summary-panel');
+                if (!overlay || !panel) {
+                    try { createFloatingTabOracleButton(); } catch (_) {}
+                    overlay = document.getElementById('taboracle-summary-overlay');
+                    panel = document.getElementById('taboracle-summary-panel');
+                }
+                if (!overlay || !panel) return;
+                // Show panel
+                panel.style.display = 'flex';
+                overlay.style.display = 'flex';
+                setSummaryPinned(overlay, panel, false);
+                const loadingEl = panel.querySelector('.summary-loading');
+                const contentEl = panel.querySelector('.summary-content');
+                loadingEl.style.display = 'block';
+                contentEl.innerHTML = '';
+                const pageTitle = (document.title || '').trim();
+                const summary = await generateAISummary(pageTitle ? `${pageTitle} (Selection)` : 'Selection', text);
+                loadingEl.style.display = 'none';
+                contentEl.innerHTML = `
+                    <div class="summary-card">
+                        <div class="summary-ai-badge">🤖 AI Generated</div>
+                        ${pageTitle ? `<h3 class="summary-title">${escapeHtml(pageTitle)} – Selection</h3>` : ''}
+                        <div class="summary-meta">
+                            <span class="word-count">${summary.wordCount} words</span>
+                            <span class="reading-time">${summary.readingTime}</span>
+                        </div>
+                        <div class="summary-text">${escapeHtml(summary.summary)}</div>
+                        ${summary.keyPoints && summary.keyPoints.length ? `
+                            <div class="summary-key-points">
+                                <h4>Key Points</h4>
+                                <ul>${summary.keyPoints.map(p => '<li>' + escapeHtml(String(p)) + '</li>').join('')}</ul>
+                            </div>
+                        ` : ''}
+                        <div class="summary-disclaimer">⚠️ AI-generated content may be inaccurate. Verify important information.</div>
+                        <div class="summary-actions">
+                            <button id="summaryReviewButton" class="review-btn">⭐ Leave a Review</button>
+                            <button id="summarySupportButton" class="support-btn">☕ Support TabOracle</button>
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                console.error('TabOracle: summarize-selection handler error', e);
+            }
+        });
+    } catch (_) {}
+
 	function init() {
 		try { createFloatingTabOracleButton(); } catch (_) {}
 	}
