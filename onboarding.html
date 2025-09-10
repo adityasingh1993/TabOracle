@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to TabOracle</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 24px; background: #fafafa; color: #111827; }
+    .container { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; box-shadow: 0 10px 24px rgba(0,0,0,0.06); }
+    .header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .brand { height: 36px; }
+    h1 { margin: 8px 0 0 0; font-size: 22px; }
+    p { color: #374151; }
+    .steps { margin-top: 12px; }
+    .card { background: #f9fafb; border: 1px solid #e5e7eb; padding: 16px; border-radius: 10px; margin: 12px 0; }
+    .primary { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; border-radius: 10px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
+    .secondary { background: #fff; color: #111827; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 14px; font-weight: 600; cursor: pointer; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    code { background: #f3f4f6; padding: 2px 4px; border-radius: 6px; }
+    .hint { font-size: 13px; color: #6b7280; margin-top: 6px; }
+    .ok { color: #059669; }
+    .warn { color: #b45309; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img class="brand" src="taboracle_combined.svg" alt="TabOracle" />
+      <h1>Welcome to TabOracle</h1>
+    </div>
+    <p>To enable AI features on your device, please turn on Chrome’s Prompt API (on-device model). This is a one-time setup and stays fully offline.</p>
+
+    <div class="steps">
+      <div class="card">
+        <strong>Step 1:</strong> Open Chrome flags for the Prompt API.
+        <div class="row" style="margin-top:8px;">
+          <button id="openFlags" class="primary">Open Chrome Flags</button>
+          <strong><code id="flagsUrl">chrome://flags/#prompt-api-for-gemini-nano</code></strong>
+          <button id="copyFlags" class="secondary" title="Copy">Copy</button>
+        </div>
+        <div id="flagsHint" class="hint"></div>
+      </div>
+      <div class="card">
+        <strong>Step 2:</strong> Enable these flags and relaunch Chrome:
+        <ul>
+          <li>Enable Prompt API for Gemini Nano</li>
+          <li>Enable Optimization Guide On Device Model (if present)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <strong>Step 3:</strong> Test the model.
+        <div class="row" style="margin-top:8px;">
+          <button id="testModel" class="secondary">Open Popup and Test AI</button>
+        </div>
+      </div>
+    </div>
+    <p style="margin-top:12px; font-size:13px; color:#6b7280;">Privacy: All processing is local. No data leaves your device.</p>
+  </div>
+
+  <script src="onboarding.js"></script>
+</body>
+</html>
+
+

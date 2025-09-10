@@ -125,13 +125,20 @@
 						<img src="${chrome.runtime.getURL('taboracle_combined.svg')}" alt="TabOracle" class="chat-brand" onerror="this.style.display='none'" />
 					</div>
 					<div class="chat-header-center">
-						<span class="panel-title">Ask Page</span>
+						<span class="panel-title"><strong>Ask Page</strong></span>
 					</div>
 					<div class="chat-header-right">
 						<button class="close-chat-btn" title="Close">✕</button>
 					</div>
 				</div>
 				<div class="chat-panel-body">
+					<div id="taboracle-chat-notice" style="display:none; background:#fffbeb; border:1px solid #f59e0b; color:#7c2d12; padding:10px; border-radius:8px; font-size:13px;">
+						<strong>Enable Prompt API</strong> to use the on-device AI for best answers.
+						<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+							<button id="taboracle-chat-onboarding" class="secondary-button" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer;">Open Guide</button>
+							<button id="taboracle-chat-flags" class="secondary-button" style="padding:6px 10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer;">Open Chrome Flags</button>
+						</div>
+					</div>
 					<div class="chat-messages" id="taboracle-chat-messages"></div>
 					<div class="chat-input-row">
 						<input id="taboracle-chat-input" type="text" placeholder="Ask about this page…" />
@@ -739,15 +746,15 @@
 			.chat-header-right { display: flex; align-items: center; gap: 6px; }
 			.close-chat-btn { background: none; border: none; color: white; font-weight: 700; cursor: pointer; font-size: 14px; }
 			#taboracle-chat-panel { position: fixed; top: 20px; right: 20px; bottom: 120px; width: 420px; max-width: 46vw; background: linear-gradient(180deg, #6d28d9 0px, #6d28d9 44px, rgba(255,255,255,0.98) 44px); border: 0; background-clip: padding-box; border-radius: 16px; box-shadow: 0 20px 40px rgba(139, 92, 246, 0.28), 0 8px 32px rgba(0,0,0,0.18); z-index: 2147483645; display: none; flex-direction: column; overflow: hidden; pointer-events: auto; }
-			.chat-panel-body { display: flex; flex-direction: column; gap: 12px; padding: 16px; height: calc(100% - 44px); }
+			.chat-panel-body { display: flex; flex-direction: column; gap: 12px; padding: 16px; height: calc(100% - 44px); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
 			.chat-messages { flex: 1 1 auto; min-height: 0; overflow-y: auto; background: rgba(255,255,255,0.92); border: 1px solid rgba(139, 92, 246, 0.12); border-radius: 12px; padding: 12px; }
 			.chat-msg { margin-bottom: 10px; }
 			.chat-msg.user { text-align: right; }
-			.chat-msg .bubble { display: inline-block; padding: 10px 12px; border-radius: 12px; max-width: 80%; }
+			.chat-msg .bubble { display: inline-block; padding: 10px 12px; border-radius: 12px; max-width: 80%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
 			.chat-msg.user .bubble { background: #eef2ff; color: #1f2937; }
 			.chat-msg.ai .bubble { background: #f8fafc; color: #111827; border: 1px solid rgba(17,24,39,0.08); }
 			.chat-input-row { display: flex; gap: 8px; }
-			#taboracle-chat-input { flex: 1; background: #ffffff; border: 1px solid rgba(17,24,39,0.15); border-radius: 10px; padding: 10px 12px; font-size: 14px; outline: none; }
+			#taboracle-chat-input { flex: 1; background: #ffffff; border: 1px solid rgba(17,24,39,0.15); border-radius: 10px; padding: 10px 12px; font-size: 14px; outline: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
 			#taboracle-chat-send { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; border-radius: 10px; padding: 10px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
 			.chat-footer { margin-top: 8px; display: flex; gap: 8px; justify-content: flex-end; }
 			.chat-footer .review-btn { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; border: none; border-radius: 10px; padding: 8px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
@@ -814,12 +821,69 @@
 			const messages = chatPanel.querySelector('#taboracle-chat-messages');
 			const reviewBtn = chatPanel.querySelector('#taboracle-chat-review');
 			const supportBtn = chatPanel.querySelector('#taboracle-chat-support');
+			const notice = chatPanel.querySelector('#taboracle-chat-notice');
+			const btnOnboarding = chatPanel.querySelector('#taboracle-chat-onboarding');
+			const btnFlags = chatPanel.querySelector('#taboracle-chat-flags');
+			const densityBtn = chatPanel.querySelector('#taboracle-chat-density');
 
 			function show() { chatOverlay.style.display = 'flex'; }
 			function hide() { chatOverlay.style.display = 'none'; }
 			closeBtn.addEventListener('click', hide);
 			chatOverlay.addEventListener('click', (e) => { if (e.target === chatOverlay) hide(); });
-			window.addEventListener('taboracle:ask-page', () => { chatPanel.style.display = 'flex'; show(); try { input.focus(); } catch (_) {} });
+			window.addEventListener('taboracle:ask-page', async () => {
+				chatPanel.style.display = 'flex'; show(); try { input.focus(); } catch (_) {}
+				// Robust Prompt API availability detection: actually try to create the model
+				async function detectPromptApi() {
+					// Default: assume unavailable
+					let available = false;
+					try {
+						if (chrome && chrome.languageModel && typeof chrome.languageModel.create === 'function') {
+							try {
+								const lm = await chrome.languageModel.create();
+								available = !!lm;
+							} catch (_) { available = false; }
+						} else if (typeof LanguageModel !== 'undefined' && LanguageModel && typeof LanguageModel.create === 'function') {
+							try {
+								const lm = await LanguageModel.create();
+								available = !!lm;
+							} catch (_) { available = false; }
+						}
+					} catch(_) { available = false; }
+					return available;
+				}
+				try {
+					const ok = await detectPromptApi();
+					if (notice) notice.style.display = ok ? 'none' : 'block';
+				} catch(_) { if (notice) notice.style.display = 'block'; }
+			});
+
+			// Robust runtime messaging with retry to handle service worker restarts
+			function sendMessageResilient(message, retries = 2, delayMs = 250) {
+				return new Promise((resolve, reject) => {
+					function attempt(remaining) {
+						try {
+							chrome.runtime.sendMessage(message, (resp) => {
+								const le = chrome.runtime.lastError;
+								if (le) {
+									// Retry on transient extension context errors
+									const msg = String(le.message || '').toLowerCase();
+									if (remaining > 0 && (msg.includes('context invalidated') || msg.includes('message port closed') || msg.includes('receiving end does not exist'))) {
+										setTimeout(() => attempt(remaining - 1), delayMs);
+										return;
+									}
+									reject(le);
+									return;
+								}
+								resolve(resp);
+							});
+						} catch (e) {
+							if (remaining > 0) { setTimeout(() => attempt(remaining - 1), delayMs); return; }
+							reject(e);
+						}
+					}
+					attempt(retries);
+				});
+			}
 
 			async function sendQuestion() {
 				const q = (input.value || '').trim();
@@ -827,6 +891,18 @@
 				appendMsg('user', q);
 				input.value = '';
 				appendMsg('ai', 'Thinking…');
+				// Handle salutations locally for a friendly quick response
+				try {
+					const norm = q.toLowerCase().replace(/[^a-z\s]/g, '').trim();
+					const isGreeting = (
+						/^(hi|hello|hey|hiya|yo|sup)\b/.test(norm) ||
+						/(how are you|hows it going|how is it going|whats up|what is up)\b/.test(norm)
+					);
+					if (isGreeting) {
+						replaceLastAi('Hi! I\'m TabOracle. Ask me anything about this page \u2014 I\'ll pull the most relevant parts to answer.');
+						return;
+					}
+				} catch (_) {}
 				try {
 					let ctx = '';
 					try {
@@ -836,12 +912,7 @@
 						}
 					} catch (_) {}
 					if (!ctx) ctx = extractVisibleText();
-					const resp = await new Promise((resolve, reject) => {
-						try { chrome.runtime.sendMessage({ action: 'askPageAnswer', question: q, context: ctx }, (r) => {
-							const le = chrome.runtime.lastError; if (le) { reject(new Error(le.message)); return; }
-							resolve(r);
-						}); } catch (e) { reject(e); }
-					});
+					const resp = await sendMessageResilient({ action: 'askPageAnswer', question: q, context: ctx, pageTitle: (document.title||''), pageUrl: (location.href||'') }, 2, 250);
 					const text = (resp && resp.success && resp.text) ? resp.text : 'I don’t know.';
 					replaceLastAi(text);
 				} catch (e) {
@@ -854,7 +925,11 @@
 				div.className = 'chat-msg ' + role;
 				const b = document.createElement('div');
 				b.className = 'bubble';
-				b.textContent = text;
+				if (role === 'ai') {
+					b.innerHTML = formatAiTextToHtml(String(text || ''));
+				} else {
+					b.textContent = String(text || '');
+				}
 				div.appendChild(b);
 				messages.appendChild(div);
 				messages.scrollTop = messages.scrollHeight;
@@ -862,7 +937,66 @@
 			function replaceLastAi(text) {
 				for (let i = messages.children.length - 1; i >= 0; i--) {
 					const c = messages.children[i];
-					if (c.classList.contains('ai')) { c.querySelector('.bubble').textContent = text; return; }
+					if (c.classList.contains('ai')) { c.querySelector('.bubble').innerHTML = formatAiTextToHtml(String(text || '')); return; }
+				}
+			}
+
+			function formatAiTextToHtml(raw) {
+				try {
+					let text = String(raw || '').replace(/\r/g, '');
+					// Extract fenced code blocks first
+					const codeBlocks = [];
+					text = text.replace(/```([\s\S]*?)```/g, (_, code) => {
+						codeBlocks.push(code);
+						return `@@CODEBLOCK_${codeBlocks.length - 1}@@`;
+					});
+					// Headings (## or # at start of lines)
+					text = text.replace(/^###\s+(.+)$/gm, '<strong>$1</strong>');
+					text = text.replace(/^##\s+(.+)$/gm, '<strong>$1</strong>');
+					text = text.replace(/^#\s+(.+)$/gm, '<strong>$1</strong>');
+					// Blockquotes
+					text = text.replace(/^>\s+(.+)$/gm, '❝ $1');
+					// Normalize bullet/numbered lists to line-per-item with bullet prefix
+					text = text.replace(/^\s*[\-*•]\s+/gm, '• ');
+					text = text.replace(/^\s*\d+\.\s+/gm, '• ');
+					// Simple markdown table -> lines (fallback): keep header and items per line
+					if (/^\|.+\|/m.test(text)) {
+						text = text.split('\n').map(line => {
+							if (/^\|.+\|$/.test(line)) {
+								const cells = line.split('|').map(s => s.trim()).filter(Boolean);
+								return '• ' + cells.join(' | ');
+							}
+							return line;
+						}).join('\n');
+					}
+					// Collapse excessive blank lines
+					text = text.replace(/\n{3,}/g, '\n\n');
+					// Basic markdown: bold and inline code
+					text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1<\/strong>');
+					text = text.replace(/`([^`]+)`/g, '<code>$1<\/code>');
+					// Linkify URLs
+					text = text.replace(/(https?:\/\/[\w.-]+[^\s]*)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1<\/a>');
+					// Convert remaining special chars safely, but keep tags we just added
+					// Escape then unescape our allowed tags
+					const esc = escapeHtml(text);
+					let html = esc
+						.replace(/&lt;strong&gt;/g, '<strong>')
+						.replace(/&lt;\/strong&gt;/g, '</strong>')
+						.replace(/&lt;code&gt;/g, '<code>')
+						.replace(/&lt;\/code&gt;/g, '</code>')
+						.replace(/&lt;a href=&quot;/g, '<a href="')
+						.replace(/&quot; target=&quot;_blank&quot; rel=&quot;noopener noreferrer&quot;&gt;/g, '" target="_blank" rel="noopener noreferrer">')
+						.replace(/&lt;\/a&gt;/g, '</a>');
+					// Replace newlines with <br>
+					html = html.replace(/\n/g, '<br>');
+					// Restore code blocks
+					html = html.replace(/@@CODEBLOCK_(\d+)@@/g, (_, idx) => {
+						const code = escapeHtml(codeBlocks[Number(idx)] || '');
+						return `<pre class="md-code"><code>${code}</code></pre>`;
+					});
+					return html;
+				} catch (_) {
+					return escapeHtml(String(raw || ''));
 				}
 			}
 
@@ -879,6 +1013,13 @@
 				const supportUrl = 'https://buymeacoffee.com/adityas';
 				try { chrome.tabs.create({ url: supportUrl }); } catch (_) { try { window.open(supportUrl, '_blank'); } catch (_) {} }
 			});
+			btnOnboarding?.addEventListener('click', async () => {
+				try { await sendMessageResilient({ action: 'openOnboarding' }, 2, 200); } catch(_) {}
+			});
+			btnFlags?.addEventListener('click', async () => {
+				try { await sendMessageResilient({ action: 'openFlags' }, 2, 200); } catch(_) {}
+			});
+            // density toggle removed
 		} catch (_) {}
 	}
 

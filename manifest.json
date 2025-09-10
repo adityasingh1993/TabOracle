@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TabOracle – AI Powered Tab Intelligence",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Intelligent context-aware tab search and organization with AI-powered explanations and summaries",
   "permissions": [
     "tabs",
@@ -29,6 +29,8 @@
         "gemini-manager.js",
         "offscreen.html",
         "offscreen.js",
+        "onboarding.html",
+        "onboarding.js",
         "pdf-viewer.html",
         "pdf-text-layer.js",
         "vendor/pdfjs/pdf.min.js",

@@ -237,7 +237,18 @@ class TabOraclePopup {
                 return;
             }
             const modelName = this.currentModel === 'custom' ? 'EmbeddingGemma' : 'Browser';
-            this.modelStatusEl.textContent = `Model: ${modelName}`;
+            // Ask background if browser model is actually available
+            if (this.currentModel === 'browser') {
+                try {
+                    const st = await this.sendMessageWithTimeout({ action: 'lmStatus' }, 5000);
+                    const avail = !!(st && st.success && st.available);
+                    this.modelStatusEl.textContent = `Model: ${avail ? 'Browser' : 'Unavailable'}`;
+                } catch (_) {
+                    this.modelStatusEl.textContent = `Model: Unavailable`;
+                }
+            } else {
+                this.modelStatusEl.textContent = `Model: ${modelName}`;
+            }
         } catch (_) {}
     }
 
@@ -326,37 +337,7 @@ class TabOraclePopup {
                 }
             }
             
-            // Check for global LanguageModel (alternative access method)
-            if (typeof LanguageModel !== 'undefined' && LanguageModel.create) {
-                console.log('🔍 TabOracle: Global LanguageModel available, attempting to initialize...');
-                try {
-                    this.languageModel = await LanguageModel.create();
-                    const testResponse = await this.languageModel.prompt('Hello');
-                    if (testResponse) {
-                        this.languageModelInitialized = true;
-                        console.log('✅ TabOracle: Global LanguageModel initialized and tested successfully');
-                        return;
-                    }
-                } catch (modelError) {
-                    console.warn('⚠️ TabOracle: Global LanguageModel failed:', modelError);
-                }
-            }
-            
-            // Check for window.LanguageModel (another alternative)
-            if (typeof window !== 'undefined' && window.LanguageModel && window.LanguageModel.create) {
-                console.log('🔍 TabOracle: Window LanguageModel available, attempting to initialize...');
-                try {
-                    this.languageModel = await window.LanguageModel.create();
-                    const testResponse = await this.languageModel.prompt('Hello');
-                    if (testResponse) {
-                        this.languageModelInitialized = true;
-                        console.log('✅ TabOracle: Window LanguageModel initialized and tested successfully');
-                        return;
-                    }
-                } catch (modelError) {
-                    console.warn('⚠️ TabOracle: Window LanguageModel failed:', modelError);
-                }
-            }
+            // Skip unsupported fallback APIs in popup to avoid DOMException noise
             
             // No language model available
             console.log('⚠️ TabOracle: No working language model available on this system');
@@ -1183,52 +1164,39 @@ class TabOraclePopup {
 
     async loadCategories() {
         try {
-            console.log('🏷️ TabOracle: Loading categories...');
-            
-            // First try to get categories directly from background script
-            try {
-                const categoriesResponse = await chrome.runtime.sendMessage({ action: 'getCategories' });
-                console.log('🏷️ TabOracle: Categories response:', categoriesResponse);
-                
-                if (categoriesResponse.categories && Object.keys(categoriesResponse.categories).length > 0) {
-                    console.log('🏷️ TabOracle: Categories loaded successfully:', Object.keys(categoriesResponse.categories));
-                    this.renderCategoriesFromBackground(categoriesResponse.categories);
-                    return;
-                }
-            } catch (error) {
-                console.warn('⚠️ TabOracle: Failed to get categories directly, trying tabs approach:', error);
-            }
-            
-            // Fallback: Get tabs and categorize locally
+            console.log('🏷️ TabOracle: Loading categories (heuristic first)...');
+
+            // Always show something quickly using local heuristic categorization
             const response = await chrome.runtime.sendMessage({ action: 'getTabs' });
-            console.log('🏷️ TabOracle: Tabs response:', response);
-            
-            this.allTabs = response.tabs || [];
+            this.allTabs = response?.tabs || [];
             console.log('🏷️ TabOracle: Tabs loaded for categories:', this.allTabs.length);
-            
-            // Debug: Log first few tabs to see their structure
-            if (this.allTabs.length > 0) {
-                console.log('🏷️ TabOracle: Sample tab structure:', this.allTabs[0]);
-                console.log('🏷️ TabOracle: Sample tab has title:', this.allTabs[0].title);
-                console.log('🏷️ TabOracle: Sample tab has URL:', this.allTabs[0].url);
-            }
-            
+
             if (this.allTabs.length === 0) {
-                console.log('🏷️ TabOracle: No tabs found for categorization');
                 this.categoriesGrid.innerHTML = '<div class="empty-state">No tabs found to categorize</div>';
                 return;
             }
-            
-            const categories = this.getCategories();
-            console.log('🏷️ TabOracle: Categories generated:', categories);
-            
-            if (categories.length === 0) {
-                console.log('🏷️ TabOracle: No categories could be determined');
+
+            // Render heuristic categories immediately
+            const localCats = this.getCategories();
+            if (localCats && localCats.length > 0) {
+                this.renderCategories();
+            } else {
                 this.categoriesGrid.innerHTML = '<div class="empty-state">No categories could be determined from your tabs</div>';
-                return;
             }
-            
-            this.renderCategories();
+
+            // Then try to enhance with AI categorization (non-blocking)
+            try {
+                const aiResp = await chrome.runtime.sendMessage({ action: 'aiCategorizeTabs' });
+                const hasCats = !!(aiResp && aiResp.success && aiResp.categories && Object.values(aiResp.categories).some(arr => Array.isArray(arr) && arr.length > 0));
+                if (hasCats) {
+                    console.log('🏷️ TabOracle: Replacing with AI categories:', Object.keys(aiResp.categories));
+                    this.renderCategoriesFromBackground(aiResp.categories);
+                } else {
+                    console.log('🏷️ TabOracle: AI categories empty; keeping heuristic view');
+                }
+            } catch (error) {
+                console.warn('⚠️ TabOracle: AI categorization failed; keeping heuristic view:', error);
+            }
         } catch (error) {
             console.error('❌ TabOracle: Failed to load categories:', error);
             this.categoriesGrid.innerHTML = '<div class="empty-state error">Error loading categories: ' + error.message + '</div>';
@@ -1389,7 +1357,9 @@ class TabOraclePopup {
     getCategories() {
         console.log('🏷️ TabOracle: Starting category generation for', this.allTabs.length, 'tabs');
         
-        const categoryMap = {};
+        const categoryMap = {
+            'All Tabs': { name: 'All Tabs', count: 0, tabs: [], confidence: 1.0, keywords: [] }
+        };
         let categorizedCount = 0;
         let uncategorizedCount = 0;
         
@@ -1397,6 +1367,15 @@ class TabOraclePopup {
         this.allTabs.forEach((tab, index) => {
             console.log(`🏷️ TabOracle: Processing tab ${index + 1}/${this.allTabs.length}:`, tab.title);
             
+            // Always include in All Tabs except internal pages
+            try {
+                const u = String(tab.url || '');
+                if (u && !u.startsWith('chrome://') && !u.startsWith('chrome-extension://') && u !== 'about:blank') {
+                    categoryMap['All Tabs'].tabs.push(tab);
+                    categoryMap['All Tabs'].count++;
+                }
+            } catch (_) {}
+
             const category = this.getSmartCategory(tab);
             console.log(`🏷️ TabOracle: Tab "${tab.title}" categorized as:`, category);
             
@@ -1435,12 +1414,13 @@ class TabOraclePopup {
             categories: Object.keys(categoryMap)
         });
 
-        // Sort categories by count and confidence
+        // Prepare categories (filter out empty), sort by count/confidence while keeping All Tabs at top
         const sortedCategories = Object.values(categoryMap)
+            .filter(cat => Array.isArray(cat.tabs) && cat.tabs.length > 0)
             .sort((a, b) => {
-                // Primary sort by count
+                if (a.name === 'All Tabs') return -1;
+                if (b.name === 'All Tabs') return 1;
                 if (b.count !== a.count) return b.count - a.count;
-                // Secondary sort by confidence
                 return b.confidence - a.confidence;
             });
             
@@ -1488,8 +1468,11 @@ class TabOraclePopup {
 
     getDomainCategory(url) {
         if (!url) return null;
-        
-        const domain = new URL(url).hostname.toLowerCase();
+        let domain = '';
+        try { domain = new URL(url).hostname.toLowerCase(); } catch (_) { return null; }
+        if (!domain) return null;
+        domain = domain.replace(/^www\./, '');
+        if (url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url === 'about:blank') return null;
         
         // Development & Tech
         if (domain.includes('github') || domain.includes('gitlab') || domain.includes('bitbucket')) {
@@ -1502,6 +1485,9 @@ class TabOraclePopup {
             return '💻 Development';
         }
         if (domain.includes('npmjs.com') || domain.includes('pypi.org') || domain.includes('rubygems.org')) {
+            return '💻 Development';
+        }
+        if (domain.includes('github.io') || domain.includes('codesandbox') || domain.includes('stackblitz') || domain.includes('localhost') || domain.includes('127.0.0.1')) {
             return '💻 Development';
         }
 
@@ -1552,7 +1538,7 @@ class TabOraclePopup {
         }
 
         // Social Media
-        if (domain.includes('facebook') || domain.includes('twitter') || domain.includes('instagram') || domain.includes('linkedin')) {
+        if (domain.includes('facebook') || domain.includes('twitter') || domain.includes('x.com') || domain.includes('instagram') || domain.includes('linkedin')) {
             return '👥 Social';
         }
         if (domain.includes('tiktok') || domain.includes('snapchat') || domain.includes('pinterest') || domain.includes('reddit')) {
@@ -1787,34 +1773,50 @@ class TabOraclePopup {
     }
 
     getCategoryIcon(categoryName) {
-        // Direct emoji mapping for categories
-        const iconMap = {
-            '💻 Development': '💻',
-            '👥 Social': '👥',
-            '📰 News': '📰',
-            '🛒 Shopping': '🛒',
-            '⚡ Productivity': '⚡',
-            '🎥 Media': '🎥',
-            '🔧 Programming': '🔧',
-            '📚 Documentation': '📚',
-            '🔍 Search': '🔍',
-            '🏷️ Other': '🏷️'
-        };
-        
-        // Try to find exact match first
-        if (iconMap[categoryName]) {
-            return iconMap[categoryName];
+        try {
+            const raw = String(categoryName || '').trim();
+            // Strip leading emojis/symbols and normalize
+            const normalized = raw.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Symbol}\p{Mark}\s]+/u, '').trim().toLowerCase();
+            // Alias map (lowercase keys)
+            const map = new Map([
+                ['all tabs', '🗂️'],
+                ['development', '💻'],
+                ['dev', '💻'],
+                ['programming', '🔧'],
+                ['docs', '📚'],
+                ['documentation', '📚'],
+                ['reference', '📚'],
+                ['video', '🎥'],
+                ['media', '🎥'],
+                ['social', '👥'],
+                ['mail/communication', '📧'],
+                ['email', '📧'],
+                ['news', '📰'],
+                ['shopping', '🛒'],
+                ['productivity', '⚡'],
+                ['cloud', '☁️'],
+                ['finance', '💰'],
+                ['search', '🔍'],
+                ['other', '🏷️']
+            ]);
+            if (map.has(normalized)) return map.get(normalized);
+            // Fuzzy contains checks
+            const contains = (s) => normalized.includes(s);
+            if (contains('dev') || contains('program')) return '💻';
+            if (contains('doc') || contains('guide') || contains('ref')) return '📚';
+            if (contains('video') || contains('media')) return '🎥';
+            if (contains('social')) return '👥';
+            if (contains('mail') || contains('comm')) return '📧';
+            if (contains('news')) return '📰';
+            if (contains('shop') || contains('store')) return '🛒';
+            if (contains('product')) return '⚡';
+            if (contains('cloud')) return '☁️';
+            if (contains('finance') || contains('bank')) return '💰';
+            if (contains('search')) return '🔍';
+            return '🏷️';
+        } catch (_) {
+            return '🏷️';
         }
-        
-        // Try to find partial matches
-        for (const [key, icon] of Object.entries(iconMap)) {
-            if (categoryName.toLowerCase().includes(key.toLowerCase().replace(/[^\w\s]/g, ''))) {
-                return icon;
-            }
-        }
-        
-        // Return default icon if no match found
-        return '🏷️';
     }
 
     async showCategoryResults(categoryName) {
@@ -2547,6 +2549,24 @@ class TabOraclePopup {
                 ${resultsHtml}
             </div>
         `;
+
+        // Delegate row click to activate tab anywhere on the row except on action buttons
+        const list = aiResults.querySelector('.ai-results-list');
+        if (list && !list._aiRowClickBound) {
+            list.addEventListener('click', async (e) => {
+                const actionBtn = e.target.closest('.ai-result-action');
+                if (actionBtn) return; // let the button's own handler run
+                const row = e.target.closest('.ai-result-item');
+                if (!row) return;
+                const tabId = Number(row.getAttribute('data-tab-id'));
+                const windowId = Number(row.getAttribute('data-window-id'));
+                try {
+                    await this.sendMessageWithTimeout({ action: 'activateTab', tabId, windowId }, 5000);
+                    window.close();
+                } catch (_) {}
+            });
+            list._aiRowClickBound = true;
+        }
     }
 
     showAISearchError(message) {

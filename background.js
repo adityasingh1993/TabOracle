@@ -11,6 +11,17 @@ console.log('🔍 TabOracle: Chrome APIs available:', {
     storage: typeof chrome !== 'undefined' && !!chrome.storage
 });
 
+// First-run onboarding: show Prompt API enable instructions
+try {
+    chrome.runtime.onInstalled.addListener((details) => {
+        try {
+            if (details.reason === 'install') {
+                chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
+            }
+        } catch (_) {}
+    });
+} catch (_) {}
+
 // Test if we can access basic Chrome APIs
 try {
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
@@ -40,6 +51,109 @@ let contextMenuCreated = false;
 let contextMenuCreating = false;
 // Persist summaries per tab until tab is closed
 const tabSummaries = {}; // { [tabId:number]: { state: 'in_progress'|'ready'|'error', data?: any, error?: string } }
+
+// ===== OFFLINE RAG-LITE (BM25) CACHE & HELPERS =====
+// In-memory cache for per-page chunk indexes (lives for SW lifetime)
+const askPageIndexCache = new Map(); // key -> { chunks: string[], tokens: string[][], df: Map<string, number>, avgLen: number }
+
+function hashStringDjb2(input) {
+    try {
+        let h = 5381;
+        for (let i = 0; i < input.length; i++) {
+            h = ((h << 5) + h) + input.charCodeAt(i);
+            h = h & 0xffffffff;
+        }
+        return String(h >>> 0);
+    } catch (_) { return String(Date.now()); }
+}
+
+function tokenizeToWordsLower(text) {
+    return String(text || '')
+        .toLowerCase()
+        .replace(/[_#*`~\[\](){}<>"'’“”‘’]|\d+/g, ' ')
+        .split(/[^a-zA-Z]+/)
+        .filter(Boolean);
+}
+
+function buildChunks(text, chunkSize = 1000, overlap = 200) {
+    const s = String(text || '');
+    if (s.length <= chunkSize) return [s];
+    const chunks = [];
+    let start = 0;
+    while (start < s.length) {
+        const end = Math.min(s.length, start + chunkSize);
+        chunks.push(s.slice(start, end));
+        if (end === s.length) break;
+        start = end - overlap;
+        if (start < 0) start = 0;
+    }
+    return chunks;
+}
+
+function buildBm25IndexForText(text) {
+    const chunks = buildChunks(text, 1100, 220);
+    const tokens = chunks.map(ch => tokenizeToWordsLower(ch));
+    const df = new Map();
+    const seenPerChunk = new Map();
+    for (let i = 0; i < tokens.length; i++) {
+        const seen = new Set(tokens[i]);
+        seenPerChunk.set(i, seen);
+        seen.forEach(t => df.set(t, (df.get(t) || 0) + 1));
+    }
+    const avgLen = tokens.reduce((a, t) => a + t.length, 0) / Math.max(1, tokens.length);
+    return { chunks, tokens, df, avgLen };
+}
+
+function getOrBuildIndexForPage(key, text) {
+    let entry = askPageIndexCache.get(key);
+    if (entry) return entry;
+    entry = buildBm25IndexForText(text);
+    askPageIndexCache.set(key, entry);
+    return entry;
+}
+
+function scoreBm25(tokensDoc, df, avgLen, queryTokens, totalDocs) {
+    // Classic BM25 with k1,b
+    const k1 = 1.5;
+    const b = 0.75;
+    const freq = new Map();
+    tokensDoc.forEach(t => freq.set(t, (freq.get(t) || 0) + 1));
+    const dl = tokensDoc.length || 1;
+    let score = 0;
+    const qUnique = Array.from(new Set(queryTokens));
+    qUnique.forEach(qt => {
+        const n_q = df.get(qt) || 0;
+        if (n_q === 0) return;
+        const idf = Math.log(1 + (totalDocs - n_q + 0.5) / (n_q + 0.5));
+        const f = freq.get(qt) || 0;
+        const denom = f + k1 * (1 - b + b * (dl / avgLen));
+        score += idf * ((f * (k1 + 1)) / Math.max(1e-9, denom));
+    });
+    return score;
+}
+
+function retrieveTopChunks(textKey, fullText, question, k = 5) {
+    const index = getOrBuildIndexForPage(textKey, fullText);
+    const qTokens = tokenizeToWordsLower(question);
+    const N = index.tokens.length || 1;
+    const scored = index.tokens.map((tok, i) => ({ i, s: scoreBm25(tok, index.df, index.avgLen, qTokens, N) }));
+    scored.sort((a, b) => b.s - a.s);
+    const top = scored.slice(0, k).filter(x => x.s > 0);
+    return top.map(x => ({ chunkIndex: x.i, score: x.s, text: index.chunks[x.i] }));
+}
+
+function composeGroundedPrompt(question, pageTitle, pageUrl, retrieved) {
+    const blocks = retrieved.map((r, idx) => `[[Chunk ${idx + 1} (score ${r.score.toFixed(2)})]]\n${r.text}`).join('\n\n');
+    const titleLine = pageTitle ? `Title: ${pageTitle}\n` : '';
+    const urlLine = pageUrl ? `URL: ${pageUrl}\n` : '';
+    return `You are a helpful assistant. Answer using ONLY the context chunks below. Quote short fragments to justify. If the answer is not present, reply: "I couldn't find this in the provided page text." and provide 1–2 closest quotes.
+${titleLine}${urlLine}
+Context Chunks:\n${blocks}
+
+Question: ${question}
+
+Answer (concise, 3-6 lines):`;
+}
 
 // Initialize tabs on startup
 function initializeTabs() {
@@ -565,13 +679,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else if (message.action === 'askPageAnswer') {
             (async () => {
                 try {
-                    const { question, context } = message;
+                    const { question, context, pageTitle, pageUrl } = message;
                     if (!question) {
                         sendResponse({ success: false, error: 'No question provided' });
                         return;
                     }
-                    const safeContext = String(context || '').slice(0, 15000);
-                    const prompt = `Use ONLY the provided page content to answer the question. If the answer is not present, say exactly: "I don't know."\n\nPAGE CONTENT:\n${safeContext}\n\nQUESTION: ${question}\n\nANSWER:`;
+                    const safeContext = String(context || '');
+                    const cacheKey = pageUrl ? `url:${pageUrl}` : `hash:${hashStringDjb2(safeContext)}`;
+                    const retrieved = retrieveTopChunks(cacheKey, safeContext, question, 5);
+                    const prompt = composeGroundedPrompt(question, pageTitle, pageUrl, retrieved).slice(0, 18000);
 
                     let text = '';
                     // Try Chrome Language Model
@@ -594,23 +710,166 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             console.warn('⚠️ askPageAnswer: global LanguageModel failed:', e);
                         }
                     }
-                    // Fallback heuristic: return best-matching sentences from context
+                    // Fallback heuristic: return best-matching sentences from top chunks
                     if (!text) {
                         try {
+                            const sourceForFallback = (retrieved && retrieved.length > 0)
+                                ? retrieved.map(r => r.text).join(' ')
+                                : safeContext;
                             const qTokens = String(question).toLowerCase().split(/\W+/).filter(Boolean);
-                            const sents = String(safeContext).split(/(?<=[.!?])\s+/);
+                            const sents = String(sourceForFallback).split(/(?<=[.!?])\s+/);
                             const scored = sents.map((s) => {
                                 const lower = s.toLowerCase();
                                 let score = 0;
                                 qTokens.forEach(t => { if (lower.includes(t)) score += 1; });
                                 return { s, score };
                             }).sort((a,b) => b.score - a.score).slice(0, 3).map(x => x.s).join(' ');
-                            text = scored || "I don't know.";
-                        } catch (_) { text = "I don't know."; }
+                            text = scored || "I couldn't find this in the provided page text.";
+                        } catch (_) { text = "I couldn't find this in the provided page text."; }
                     }
                     sendResponse({ success: true, text: String(text).trim() });
                 } catch (error) {
                     sendResponse({ success: false, error: error.message });
+                }
+            })();
+            return true;
+        } else if (message.action === 'openOnboarding') {
+            try {
+                chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') });
+                sendResponse({ success: true });
+            } catch (e) {
+                sendResponse({ success: false, error: e.message });
+            }
+            return true;
+        } else if (message.action === 'openFlags') {
+            try {
+                chrome.tabs.create({ url: 'chrome://flags/#prompt-api-for-gemini-nano' }, () => {
+                    const le = chrome.runtime.lastError;
+                    if (le) {
+                        sendResponse({ success: false, error: le.message });
+                    } else {
+                        sendResponse({ success: true });
+                    }
+                });
+            } catch (e) {
+                sendResponse({ success: false, error: e.message });
+            }
+            return true;
+        } else if (message.action === 'activateTab') {
+            (async () => {
+                try {
+                    const tabId = Number(message.tabId);
+                    const windowId = Number(message.windowId);
+                    if (Number.isFinite(windowId)) {
+                        try { await chrome.windows.update(windowId, { focused: true }); } catch (_) {}
+                    }
+                    if (Number.isFinite(tabId)) {
+                        await chrome.tabs.update(tabId, { active: true });
+                        sendResponse({ success: true });
+                        return;
+                    }
+                    sendResponse({ success: false, error: 'Invalid tab/window id' });
+                } catch (e) {
+                    sendResponse({ success: false, error: e.message });
+                }
+            })();
+            return true;
+        } else if (message.action === 'lmStatus') {
+            (async () => {
+                try {
+                    if (chrome?.languageModel?.create) {
+                        try {
+                            const lm = await chrome.languageModel.create();
+                            const resp = await lm.prompt('ping');
+                            sendResponse({ success: true, available: !!resp });
+                            return;
+                        } catch (_) {}
+                    }
+                    sendResponse({ success: true, available: false });
+                } catch (e) {
+                    sendResponse({ success: false, error: e.message });
+                }
+            })();
+            return true;
+        } else if (message.action === 'aiCategorizeTabs') {
+            (async () => {
+                try {
+                    await initializeTabs();
+                    const currentTabs = tabs || [];
+                    const items = currentTabs.map((t, i) => ({ index: i, url: (t.url || '').slice(0, 300) }));
+                    const categoriesList = ['Docs','Development','Video','Social','Mail/Communication','News','Shopping','Productivity','Cloud','Other'];
+
+                    async function aiClassify() {
+                        try {
+                            const prompt = `You are a strict URL classifier. For each URL, output a JSON array of { index, category } using ONLY this fixed set: ${categoriesList.join(', ')}. Base your decision purely on the URL/hostname/path patterns (no guessing beyond that).\n\nURLs:\n` + items.map(it => `#${it.index} | ${it.url}`).join('\n') + `\n\nReturn ONLY the JSON array.`;
+                            let respText = '';
+                            if (chrome?.languageModel?.create) {
+                                const lm = await chrome.languageModel.create();
+                                const resp = await lm.prompt(prompt);
+                                respText = typeof resp === 'string' ? resp : (resp?.text || resp?.response || '');
+                            } else if (typeof LanguageModel !== 'undefined' && LanguageModel?.create) {
+                                const lm = await LanguageModel.create();
+                                const resp = await lm.prompt(prompt);
+                                respText = typeof resp === 'string' ? resp : (resp?.text || resp?.response || '');
+                            }
+                            if (!respText) return null;
+                            const m = respText.match(/\[[\s\S]*\]/);
+                            const parsed = JSON.parse(m ? m[0] : respText);
+                            return Array.isArray(parsed) ? parsed : null;
+                        } catch (_) { return null; }
+                    }
+
+                    function simpleCategoryByRules(title, url) {
+                        const u = String(url || '');
+                        const h = (() => { try { return new URL(u).hostname.toLowerCase(); } catch { return ''; } })();
+                        const t = String(title || '').toLowerCase();
+                        if (!u || u.startsWith('chrome://') || u.startsWith('chrome-extension://') || u === 'about:blank') return null;
+                        const host = h.replace(/^www\./, '');
+                        if (/github\.com|gitlab\.com|stack(over| )?flow|npmjs\.com|developer\.|docs\.|readthedocs|mdn\.mozilla\.org/.test(host) || /(api|docs|tutorial|guide)/.test(t)) return 'Docs';
+                        if (/youtube\.com|vimeo\.com|twitch\.tv/.test(host)) return 'Video';
+                        if (/twitter\.com|x\.com|linkedin\.com|facebook\.com|instagram\.com/.test(host)) return 'Social';
+                        if (/gmail\.com|outlook\.live\.com|slack\.com|discord\.com/.test(host)) return 'Mail/Communication';
+                        if (/news|nytimes\.com|bbc\.co\.uk|cnn\.com|reuters\.com/.test(host)) return 'News';
+                        if (/amazon\.com|flipkart|ebay\.com|shop|store/.test(host)) return 'Shopping';
+                        if (/notion\.so|trello\.com|asana\.com|linear\.app|todoist\.com/.test(host)) return 'Productivity';
+                        if (/console\.|cloud\.google\.com|aws\.amazon\.com|azure\.microsoft\.com/.test(host)) return 'Cloud';
+                        if (/dev|code|localhost|127\.0\.0\.1/.test(host) || /(react|angular|vue|node|webpack|typescript|javascript|python|golang)/.test(t)) return 'Development';
+                        return 'Other';
+                    }
+
+                    function fallbackCategorize() {
+                        const categories = {};
+                        currentTabs.forEach((tab, idx) => {
+                            const cat = simpleCategoryByRules(tab.title, tab.url) || 'Other';
+                            if (!categories[cat]) categories[cat] = [];
+                            categories[cat].push({ index: idx, id: tab.id, title: tab.title, url: tab.url, favIconUrl: tab.favIconUrl });
+                        });
+                        return categories;
+                    }
+
+                    const aiResult = await aiClassify();
+                    if (aiResult && aiResult.length) {
+                        const categories = {};
+                        aiResult.forEach(r => {
+                            const i = r.index;
+                            if (typeof i !== 'number' || i < 0 || i >= currentTabs.length) return;
+                            const cat = categoriesList.includes(r.category) ? r.category : 'Other';
+                            if (!categories[cat]) categories[cat] = [];
+                            const tab = currentTabs[i];
+                            categories[cat].push({ index: i, id: tab.id, title: tab.title, url: tab.url, favIconUrl: tab.favIconUrl });
+                        });
+                        // If all categories are empty or object has no non-empty arrays, fallback
+                        const hasNonEmpty = Object.values(categories).some(arr => Array.isArray(arr) && arr.length > 0);
+                        if (hasNonEmpty) {
+                            sendResponse({ success: true, categories });
+                            return;
+                        }
+                    }
+
+                    // Fallback when AI missing/failed or produced empty categories
+                    sendResponse({ success: true, categories: fallbackCategorize() });
+                } catch (e) {
+                    sendResponse({ success: false, error: e.message });
                 }
             })();
             return true;
@@ -927,6 +1186,18 @@ async function extractTabContent(tabId) {
                 });
             });
             if (tab && tab.url) {
+                // Guard: skip restricted pages that cannot be scripted
+                try {
+                    const u0 = new URL(tab.url);
+                    const host0 = (u0.hostname || '').toLowerCase();
+                    const isRestrictedScheme = /^(chrome:|edge:|about:)/i.test(u0.protocol);
+                    const isExtensionUrl = u0.protocol === 'chrome-extension:';
+                    const isWebStore = (host0 === 'chrome.google.com' && u0.pathname.startsWith('/webstore')) || (host0 === 'microsoftedge.microsoft.com' && u0.pathname.startsWith('/addons'));
+                    if (isRestrictedScheme || isExtensionUrl || isWebStore) {
+                        console.warn('⚠️ TabOracle: Restricted page, skipping content scripting:', tab.url);
+                        return { title: tab.title || '', content: '', url: tab.url, restricted: true, timestamp: new Date().toISOString() };
+                    }
+                } catch (_) {}
                 let effectiveUrl = tab.url;
                 try {
                     const u = new URL(tab.url);
