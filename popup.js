@@ -30,6 +30,10 @@ class TabOraclePopup {
         this.summaryButton = document.getElementById('summaryButton');
         this.summaryResults = document.getElementById('summaryResults');
         this.summaryLoading = document.getElementById('summaryLoading');
+        // Model settings UI
+        this.modelBrowserRadio = document.getElementById('modelBrowser');
+        this.modelCustomRadio = document.getElementById('modelCustom');
+        this.modelStatusEl = document.getElementById('modelStatus');
         
         // Initialize additional elements needed for tab switching
         this.initializeElements();
@@ -51,6 +55,9 @@ class TabOraclePopup {
         // Set default tab and load initial content
         this.currentTab = 'normalSearchTab';
         this.switchTab('normalSearchTab');
+
+        // Load settings and reflect model status
+        this.loadModelSettingAndInit();
 
         // If a persisted summary exists for the active tab, show it immediately
         (async () => {
@@ -201,6 +208,98 @@ class TabOraclePopup {
         }
     }
 
+    async loadModelSettingAndInit() {
+        try {
+            const { aiModel = 'browser' } = await new Promise((resolve) => {
+                try { chrome.storage.sync.get(['aiModel'], resolve); } catch (_e) { resolve({}); }
+            });
+            this.currentModel = aiModel === 'custom' ? 'custom' : 'browser';
+            if (this.modelBrowserRadio) this.modelBrowserRadio.checked = this.currentModel === 'browser';
+            if (this.modelCustomRadio) this.modelCustomRadio.checked = this.currentModel === 'custom';
+            await this.updateModelStatus();
+
+            // Initialize selected model
+            if (this.currentModel === 'custom') {
+                await this.initEmbeddingModel();
+            } else {
+                await this.ensureLanguageModelInitialized();
+            }
+        } catch (e) {
+            console.warn('⚠️ TabOracle: loadModelSettingAndInit failed', e);
+        }
+    }
+
+    async updateModelStatus(statusText) {
+        try {
+            if (!this.modelStatusEl) return;
+            if (statusText) {
+                this.modelStatusEl.textContent = `Model: ${statusText}`;
+                return;
+            }
+            const modelName = this.currentModel === 'custom' ? 'EmbeddingGemma' : 'Browser';
+            this.modelStatusEl.textContent = `Model: ${modelName}`;
+        } catch (_) {}
+    }
+
+    async initEmbeddingModel() {
+        console.log('🔍 TabOracle: initEmbeddingModel...');
+        try {
+            console.log('🔍 TabOracle: Initializing embedding model...');
+            await this.ensureOffscreenForEmbedding();
+            console.log('🔍 TabOracle: Ensured offscreen for embedding...');
+            const resp = await this.sendMessageWithTimeout({ action: 'embeddingInit', options: {} }, 20000);
+            if (!resp || !resp.success) throw new Error(resp && resp.error || 'Embedding init failed');
+            const statusEl = document.getElementById('modelStatusPill');
+            if (statusEl) statusEl.textContent = `Model: ${resp.modelId || 'Ready'}`;
+        } catch (e) {
+            console.warn('⚠️ TabOracle: initEmbeddingModel failed', e);
+            await this.updateModelStatus('EmbeddingGemma (init failed)');
+        }
+    }
+
+    async ensureOffscreenForEmbedding(forceReload = true) {
+        try {
+            if (!chrome.offscreen || !chrome.offscreen.createDocument) return;
+            console.log('🔍 TabOracle: Ensuring offscreen for embedding...', chrome.offscreen);
+            const exists = await chrome.offscreen.hasDocument?.();
+            if (exists && forceReload && chrome.offscreen.closeDocument) {
+                try {
+                    console.log('🔄 TabOracle: Closing existing offscreen document to reload updated embedding logic...');
+                    await chrome.offscreen.closeDocument();
+                } catch (_) {}
+            }
+            const existsAfter = await chrome.offscreen.hasDocument?.();
+            if (!existsAfter) {
+                await chrome.offscreen.createDocument({
+                    url: chrome.runtime.getURL('offscreen.html'),
+                    reasons: ['DOM_PARSER'],
+                    justification: 'Run embedding model in offscreen context'
+                });
+            }
+        } catch (_) {}
+    }
+
+    async sendMessageWithTimeout(msg, timeoutMs = 15000) {
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            const timer = setTimeout(() => {
+                if (!settled) { settled = true; reject(new Error('Message timeout')); }
+            }, timeoutMs);
+            try {
+                chrome.runtime.sendMessage(msg, (resp) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    const lastErr = chrome.runtime.lastError;
+                    if (lastErr) { reject(new Error(lastErr.message)); return; }
+                    resolve(resp);
+                });
+            } catch (e) {
+                if (!settled) { settled = true; clearTimeout(timer); reject(e); }
+            }
+        });
+    }
+
     async ensureLanguageModelInitialized() {
         if (this.languageModelInitialized) return;
         try {
@@ -301,10 +400,11 @@ class TabOraclePopup {
     }
 
     setSummaryLoading(isLoading, message = 'Generating summary...') {
-        if (!this.pageSummaryContent) return;
+        const container = document.getElementById('settingsOutput') || this.pageSummaryContent;
+        if (!container) return;
         if (isLoading) {
-            this.pageSummaryContent.classList.add('loading');
-            this.pageSummaryContent.innerHTML = `
+            container.classList.add('loading');
+            container.innerHTML = `
                 <div class="ai-search-loading">
                     <div class="loading-spinner">
                     <img src="${chrome.runtime.getURL('taboracle_icon_only.svg')}" 
@@ -321,58 +421,54 @@ class TabOraclePopup {
                 </div>
             `;
         } else {
-            this.pageSummaryContent.classList.remove('loading');
+            container.classList.remove('loading');
         }
     }
 
-    async handleTestLanguageModel() {
-        console.log('🧪 TabOracle: Starting Test AI...');
+    async handleTestTabOracle() {
+        console.log('🧪 TabOracle: Starting Test TabOracle...');
         try {
+            const out = document.getElementById('settingsOutput') || this.pageSummaryContent;
+            // Prefer browser model test first
             console.log('🧪 TabOracle: Ensuring language model initialized...');
             await this.ensureLanguageModelInitialized();
-            if (!this.languageModel || !this.languageModel.prompt) {
-                console.log('⚠️ TabOracle: No AI model available, showing fallback message');
-                this.pageSummaryContent.innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">🤖</div>
-                        <div><strong>AI Features Note</strong></div>
-                        <div>Chrome Language Model (Gemini Nano) is not working on this system.</div>
-                        <div>TabOracle will use intelligent fallback for summaries.</div>
-                        <div style="margin-top: 10px; font-size: 12px; color: #666;">
-                            This may be due to Windows compatibility, Chrome version, or API permissions.
-                        </div>
-                        <div style="margin-top: 10px; font-size: 12px; color: #666;">
-                            Try the "Generate Summary" button to see the fallback in action.
-                        </div>
-                    </div>
-                `;
-                if (this.geminiNotice) this.geminiNotice.style.display = 'flex';
+            if (this.languageModel && this.languageModel.prompt) {
+                this.setSummaryLoading(true, 'Testing browser model...');
+                const response = await this.languageModel.prompt('Say "Hello, TabOracle is working!"');
+                const text = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+                this.setSummaryLoading(false);
+                if (out) out.innerHTML = `<div class="summary-text">${this.escapeHtml(text)}</div>`;
                 return;
             }
-            this.setSummaryLoading(true, 'Testing on-device AI...');
-            const response = await this.languageModel.prompt('Say "Hello, TabOracle is working!"');
-            const text = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
+
+            // Fallback to embedding test if browser model not available
+            console.log('🧪 TabOracle: Browser model unavailable, testing embedding instead...');
+            await this.initEmbeddingModel();
+            this.setSummaryLoading(true, 'Testing EmbeddingGemma...');
+            const resp = await this.sendMessageWithTimeout({ action: 'embeddingCompute', texts: ['hello', 'world'], mode: 'documents' }, 30000);
             this.setSummaryLoading(false);
-            this.pageSummaryContent.innerHTML = `
-                <div class="summary-text">${this.escapeHtml(text)}</div>
-            `;
+            if (resp && resp.success) {
+                if (out) out.innerHTML = `<div class="summary-text">Embedding model is working (vectors: ${resp.vectors?.length || 0})</div>`;
+            } else {
+                if (out) out.innerHTML = `<div class="empty-state error">Embedding test failed: ${this.escapeHtml(resp && resp.error || 'unknown error')}</div>`;
+            }
         } catch (error) {
             console.error('❌ TabOracle: Test AI failed:', error);
             this.setSummaryLoading(false);
             
             let errorDetails = error.message;
-            if (error.name === 'DOMException') {
+            if (error?.message?.includes('chrome.languageModel') || error?.message?.includes('LanguageModel')) {
                 errorDetails = 'Permission or compatibility issue with Chrome Language Model API';
             }
             
-            this.pageSummaryContent.innerHTML = `
+            const out = document.getElementById('settingsOutput') || this.pageSummaryContent;
+            if (out) out.innerHTML = `
                 <div class="empty-state error">
                     <div class="icon">❌</div>
-                    <div><strong>AI Test Failed</strong></div>
+                    <div><strong>Test Failed</strong></div>
                     <div>Error: ${this.escapeHtml(errorDetails)}</div>
                     <div style="margin-top: 10px; font-size: 12px; color: #666;">
-                        This is likely due to Chrome Language Model API issues.<br>
-                        Try the "Generate Summary" button to use the fallback system.
+                        This may be due to browser model or embedding initialization issues.
                     </div>
                 </div>
             `;
@@ -724,16 +820,77 @@ class TabOraclePopup {
         // AI Search button
         if (this.aiSearchButton) {
             this.aiSearchButton.addEventListener('click', () => {
-                const query = this.aiSearchInput?.value || this.smartSearchInput?.value;
-                if (query) {
-                    this.performAISearch(query);
-                }
+                const inputEl = document.getElementById('aiSearchInput') || document.getElementById('smartSearchInput');
+                const query = inputEl?.value || '';
+                if (query) this.performAISearch(query);
+            });
+        }
+
+
+        // Clear AI search
+        const clearBtn = document.getElementById('clearAISearch');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => this.clearSmartSearch());
+        }
+
+        // Suggested chips
+        const chips = document.getElementById('suggestedChips');
+        if (chips) {
+            chips.addEventListener('click', (e) => {
+                const btn = e.target.closest('.chip');
+                if (!btn) return;
+                const prompt = btn.getAttribute('data-prompt') || btn.textContent;
+                if (this.smartSearchInput) this.smartSearchInput.value = prompt;
+                this.performAISearch(prompt);
             });
         }
         
         // Review button functionality
         this.setupReviewButton();
         
+        // Settings actions
+        const testTabOracle = document.getElementById('testTabOracle');
+        if (testTabOracle) {
+            testTabOracle.addEventListener('click', async () => {
+                const out = document.getElementById('settingsOutput');
+                if (out) {
+                    out.classList.add('loading');
+                    out.innerHTML = '<div>Running diagnostics…</div>';
+                }
+                try {
+                    await this.loadTabs();
+                    const tabsCount = (this.allTabs || []).length;
+                    const status = `Tabs loaded: ${tabsCount}. Runtime OK: ${!!chrome?.runtime}.`;
+                    if (out) out.innerHTML = `<div class="settings-text">${this.escapeHtml(status)}</div>`;
+                } catch (e) {
+                    if (out) out.innerHTML = `<div class="empty-state error">${this.escapeHtml(e.message)}</div>`;
+                } finally {
+                    if (out) out.classList.remove('loading');
+                }
+            });
+        }
+
+        const testLMBtn = document.getElementById('testLanguageModel');
+        if (testLMBtn) {
+            testLMBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.handleTestTabOracle();
+            });
+        }
+
+        const openPromptFlags = document.getElementById('openPromptFlags');
+        if (openPromptFlags) {
+            openPromptFlags.addEventListener('click', () => {
+                try {
+                    chrome.tabs.create({ url: 'chrome://flags/#prompt-api-for-gemini-nano' });
+                } catch (_) {}
+            });
+        }
+
+        // Detect Prompt API availability and style card
+        this.updatePromptApiCard();
+
         // Category selection
         if (this.categoriesGrid) {
             console.log('🎯 TabOracle: Setting up category click handling...');
@@ -771,14 +928,41 @@ class TabOraclePopup {
                 this.loadTabs();
             });
         }
+
+        // Model selection
+        const onModelChange = async (model) => {
+            try {
+                this.currentModel = model;
+                await new Promise((resolve) => {
+                    try { chrome.storage.sync.set({ aiModel: model }, resolve); } catch (_e) { resolve(); }
+                });
+                await this.updateModelStatus();
+                if (model === 'custom') {
+                    await this.initEmbeddingModel();
+                } else {
+                    await this.ensureLanguageModelInitialized();
+                }
+            } catch (e) {
+                console.warn('⚠️ TabOracle: model change failed', e);
+            }
+        };
+        if (this.modelBrowserRadio) {
+            this.modelBrowserRadio.addEventListener('change', (e) => {
+                if (e.target && e.target.checked) onModelChange('browser');
+            });
+        }
+        if (this.modelCustomRadio) {
+            this.modelCustomRadio.addEventListener('change', (e) => {
+                if (e.target && e.target.checked) onModelChange('custom');
+            });
+        }
         
         // Page summary actions
         if (this.testLanguageModelButton) {
             console.log('🔍 TabOracle: Adding click listener to Test AI button');
             
-            // Add visual indicator that button is clickable
-            this.testLanguageModelButton.style.border = '2px solid #4CAF50';
-            this.testLanguageModelButton.title = 'Click to test AI (Debug: Button is clickable)';
+            // Clean UI: no debug borders
+            this.testLanguageModelButton.title = 'Test browser AI model';
             
             // Test if button is actually in DOM and visible
             console.log('🔍 TabOracle: Test AI button properties:', {
@@ -792,8 +976,8 @@ class TabOraclePopup {
             this.testLanguageModelButton.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('🔍 TabOracle: Test AI button clicked (click event)');
-                this.handleTestLanguageModel();
+                console.log('🔍 TabOracle: Test button clicked');
+                this.handleTestTabOracle();
             });
             
             this.testLanguageModelButton.addEventListener('mousedown', (e) => {
@@ -807,8 +991,8 @@ class TabOraclePopup {
             // Also try touch events for better compatibility
             this.testLanguageModelButton.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                console.log('🔍 TabOracle: Test AI button touchstart');
-                this.handleTestLanguageModel();
+                console.log('🔍 TabOracle: Test button touchstart');
+                this.handleTestTabOracle();
             });
             
         } else {
@@ -827,9 +1011,8 @@ class TabOraclePopup {
         if (this.generateSummaryButton) {
             console.log('🔍 TabOracle: Adding click listener to Generate Summary button');
             
-            // Add visual indicator that button is clickable
-            this.generateSummaryButton.style.border = '2px solid #2196F3';
-            this.generateSummaryButton.title = 'Click to generate summary (Debug: Button is clickable)';
+            // Clean UI: no debug borders
+            this.generateSummaryButton.title = 'Generate summary';
             
             // Test if button is actually in DOM and visible
             console.log('🔍 TabOracle: Generate Summary button properties:', {
@@ -863,7 +1046,7 @@ class TabOraclePopup {
             });
             
         } else {
-            console.error('❌ TabOracle: Generate Summary button not found');
+            console.log('ℹ️ TabOracle: Generate Summary button not present (expected)');
         }
         
 
@@ -875,6 +1058,32 @@ class TabOraclePopup {
         }
         
         console.log('🎯 TabOracle: Event listeners setup complete');
+    }
+
+    updatePromptApiCard() {
+        try {
+            const card = document.getElementById('promptApiCard');
+            const pill = document.getElementById('promptApiStatus');
+            if (!card || !pill) return;
+            const available = (typeof chrome !== 'undefined' && !!(chrome.languageModel?.create)) ||
+                              (typeof LanguageModel !== 'undefined') ||
+                              (typeof window !== 'undefined' && !!window.LanguageModel);
+            if (available) {
+                card.classList.remove('error');
+                card.classList.add('ok');
+                pill.textContent = 'Enabled';
+                pill.style.background = '#dcfce7';
+                pill.style.color = '#065f46';
+                pill.style.borderColor = '#bbf7d0';
+            } else {
+                card.classList.remove('ok');
+                card.classList.add('error');
+                pill.textContent = 'Disabled';
+                pill.style.background = '#fee2e2';
+                pill.style.color = '#991b1b';
+                pill.style.borderColor = '#fecaca';
+            }
+        } catch (_) {}
     }
 
     switchTab(tabName) {
@@ -949,8 +1158,8 @@ class TabOraclePopup {
                 console.log('🔄 TabOracle: Loading smart search content');
                 this.loadSmartSearch();
                 break;
-            case 'pageSummaryTab':
-                console.log('🔄 TabOracle: Page summary tab ready');
+            case 'settingsTab':
+                console.log('🔄 TabOracle: Settings tab ready');
                 this.ensureLanguageModelInitialized();
                 break;
             default:
@@ -1845,14 +2054,24 @@ class TabOraclePopup {
         this.setAISearchLoading(true, 'Analyzing tabs with AI...');
         
         try {
-            // Get all tabs with content
-            const tabsWithContent = await this.getTabsWithContent();
-            
-            // Use AI to analyze and rank tabs
-            const aiResults = await this.analyzeTabsWithAI(query, tabsWithContent);
-            
-            // Display results
-            this.showAISearchResults(aiResults);
+            // If custom model is enabled, use embedding-based ranking via background
+            if (this.currentModel === 'custom') {
+                const resp = await this.sendMessageWithTimeout({ action: 'embeddingRankTabs', query, maxTabs: 15, contentChars: 1800 }, 45000);
+                if (resp && resp.success) {
+                    const results = (resp.results || []).map(r => ({ tab: r, score: Math.round((r.score || 0) * 100) }));
+                    this.showAISearchResults(results);
+                } else {
+                    console.warn('⚠️ TabOracle: embeddingRankTabs failed, falling back', resp && resp.error);
+                    const tabsWithContent = await this.getTabsWithContent();
+                    const aiResults = await this.analyzeTabsWithAI(query, tabsWithContent);
+                    this.showAISearchResults(aiResults);
+                }
+            } else {
+                // Browser model or fallback path
+                const tabsWithContent = await this.getTabsWithContent();
+                const aiResults = await this.analyzeTabsWithAI(query, tabsWithContent);
+                this.showAISearchResults(aiResults);
+            }
             
         } catch (error) {
             console.error('❌ TabOracle: AI search failed:', error);
@@ -2342,6 +2561,66 @@ class TabOraclePopup {
                 <div class="error-subtext">Try using the regular search instead</div>
             </div>
         `;
+    }
+
+
+    // ===== Markdown rendering (safe subset) =====
+    sanitizeUrl(url) {
+        try {
+            const u = String(url || '').trim();
+            if (/^https?:\/\//i.test(u)) return u;
+            return '#';
+        } catch (_) { return '#'; }
+    }
+
+    renderMarkdownSafely(md) {
+        // Escape HTML first
+        let text = this.escapeHtml(String(md || ''));
+
+        // Code fences ```lang\ncode```
+        text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (m, lang, code) => {
+            const language = this.escapeHtml(lang || '');
+            return `<pre class="md-code"><code class="language-${language}">${code}</code></pre>`;
+        });
+
+        // Headings #..######
+        text = text.replace(/^######\s+(.+)$/gm, '<h6>$1</h6>')
+                   .replace(/^#####\s+(.+)$/gm, '<h5>$1</h5>')
+                   .replace(/^####\s+(.+)$/gm, '<h4>$1</h4>')
+                   .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+                   .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+                   .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
+
+        // Ordered lists (simple block-level)
+        text = text.replace(/(?:^|\n)(?:\d+\.\s+.+(?:\n|$))+?/g, (block) => {
+            const items = block.trim().split(/\n/).map(l => l.replace(/^\d+\.\s+/, '').trim()).filter(Boolean);
+            if (!items.length) return block;
+            return `\n<ol>${items.map(it => `<li>${it}</li>`).join('')}</ol>\n`;
+        });
+
+        // Unordered lists (simple block-level)
+        text = text.replace(/(?:^|\n)(?:[-*]\s+.+(?:\n|$))+?/g, (block) => {
+            const items = block.trim().split(/\n/).map(l => l.replace(/^[-*]\s+/, '').trim()).filter(Boolean);
+            if (!items.length) return block;
+            return `\n<ul>${items.map(it => `<li>${it}</li>`).join('')}</ul>\n`;
+        });
+
+        // Links [text](url)
+        text = text.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, (m, label, url) => {
+            const safeUrl = this.sanitizeUrl(url);
+            return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+        });
+
+        // Bold, italic, inline code, strike
+        text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                   .replace(/(^|\s)\*(?!\*)([^*]+)\*(?=\s|$)/g, '$1<em>$2</em>')
+                   .replace(/`([^`]+)`/g, '<code>$1</code>')
+                   .replace(/~~(.+?)~~/g, '<del>$1</del>');
+
+        // Line breaks
+        text = text.replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>');
+
+        return text;
     }
 
     createTabElement(tab) {

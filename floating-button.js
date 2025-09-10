@@ -157,6 +157,203 @@
 	let summarizeInProgress = false;
 	let __lastExplainSelection = '';
 
+	// Drag functionality for floating button
+	let isDragging = false;
+	let dragStartX = 0;
+	let dragStartY = 0;
+	let initialX = 0;
+	let initialY = 0;
+
+	function loadFloatingButtonPosition(floatingBtn) {
+		try {
+			const savedPosition = localStorage.getItem('taboracle-floating-btn-position');
+			if (savedPosition) {
+				const { x, y } = JSON.parse(savedPosition);
+				floatingBtn.style.left = x + 'px';
+				floatingBtn.style.top = y + 'px';
+				floatingBtn.style.right = 'auto';
+				floatingBtn.style.bottom = 'auto';
+			}
+		} catch (e) {
+			console.warn('TabOracle: Failed to load floating button position:', e);
+		}
+	}
+
+	function saveFloatingButtonPosition(floatingBtn) {
+		try {
+			const rect = floatingBtn.getBoundingClientRect();
+			const position = {
+				x: rect.left,
+				y: rect.top
+			};
+			localStorage.setItem('taboracle-floating-btn-position', JSON.stringify(position));
+		} catch (e) {
+			console.warn('TabOracle: Failed to save floating button position:', e);
+		}
+	}
+
+	function setupDragFunctionality(floatingBtn, mainBtn) {
+		// Add drag cursor to main button
+		mainBtn.style.cursor = 'grab';
+		mainBtn.title = 'Drag to move TabOracle button';
+
+		// Mouse events for dragging
+		mainBtn.addEventListener('mousedown', (e) => {
+			// Only start drag on left mouse button
+			if (e.button !== 0) return;
+			
+			e.preventDefault();
+			e.stopPropagation();
+			
+			isDragging = true;
+			dragStartX = e.clientX;
+			dragStartY = e.clientY;
+			
+			const rect = floatingBtn.getBoundingClientRect();
+			initialX = rect.left;
+			initialY = rect.top;
+			
+			mainBtn.style.cursor = 'grabbing';
+			floatingBtn.style.transition = 'none'; // Disable transitions during drag
+			
+			// Hide hover buttons during drag
+			const hoverButtons = floatingBtn.querySelector('.taboracle-hover-buttons');
+			if (hoverButtons) {
+				hoverButtons.style.display = 'none';
+				floatingBtn.classList.remove('expanded');
+			}
+		});
+
+		document.addEventListener('mousemove', (e) => {
+			if (!isDragging) return;
+			
+			e.preventDefault();
+			
+			const deltaX = e.clientX - dragStartX;
+			const deltaY = e.clientY - dragStartY;
+			
+			let newX = initialX + deltaX;
+			let newY = initialY + deltaY;
+			
+			// Constrain to viewport bounds
+			const buttonSize = 72; // Button size
+			const margin = 10; // Minimum margin from edges
+			
+			newX = Math.max(margin, Math.min(newX, window.innerWidth - buttonSize - margin));
+			newY = Math.max(margin, Math.min(newY, window.innerHeight - buttonSize - margin));
+			
+			floatingBtn.style.left = newX + 'px';
+			floatingBtn.style.top = newY + 'px';
+			floatingBtn.style.right = 'auto';
+			floatingBtn.style.bottom = 'auto';
+		});
+
+		document.addEventListener('mouseup', (e) => {
+			if (!isDragging) return;
+			
+			isDragging = false;
+			mainBtn.style.cursor = 'grab';
+			floatingBtn.style.transition = 'all 0.3s ease'; // Re-enable transitions
+			
+			// Save position
+			saveFloatingButtonPosition(floatingBtn);
+		});
+
+		// Touch events for mobile devices
+		mainBtn.addEventListener('touchstart', (e) => {
+			if (e.touches.length !== 1) return;
+			
+			e.preventDefault();
+			e.stopPropagation();
+			
+			isDragging = true;
+			const touch = e.touches[0];
+			dragStartX = touch.clientX;
+			dragStartY = touch.clientY;
+			
+			const rect = floatingBtn.getBoundingClientRect();
+			initialX = rect.left;
+			initialY = rect.top;
+			
+			floatingBtn.style.transition = 'none';
+			
+			// Hide hover buttons during drag
+			const hoverButtons = floatingBtn.querySelector('.taboracle-hover-buttons');
+			if (hoverButtons) {
+				hoverButtons.style.display = 'none';
+				floatingBtn.classList.remove('expanded');
+			}
+		});
+
+		document.addEventListener('touchmove', (e) => {
+			if (!isDragging || e.touches.length !== 1) return;
+			
+			e.preventDefault();
+			
+			const touch = e.touches[0];
+			const deltaX = touch.clientX - dragStartX;
+			const deltaY = touch.clientY - dragStartY;
+			
+			let newX = initialX + deltaX;
+			let newY = initialY + deltaY;
+			
+			// Constrain to viewport bounds
+			const buttonSize = 72;
+			const margin = 10;
+			
+			newX = Math.max(margin, Math.min(newX, window.innerWidth - buttonSize - margin));
+			newY = Math.max(margin, Math.min(newY, window.innerHeight - buttonSize - margin));
+			
+			floatingBtn.style.left = newX + 'px';
+			floatingBtn.style.top = newY + 'px';
+			floatingBtn.style.right = 'auto';
+			floatingBtn.style.bottom = 'auto';
+		});
+
+		document.addEventListener('touchend', (e) => {
+			if (!isDragging) return;
+			
+			isDragging = false;
+			floatingBtn.style.transition = 'all 0.3s ease';
+			
+			// Save position
+			saveFloatingButtonPosition(floatingBtn);
+		});
+
+		// Handle window resize to keep button in bounds
+		window.addEventListener('resize', () => {
+			const rect = floatingBtn.getBoundingClientRect();
+			const buttonSize = 72;
+			const margin = 10;
+			
+			let needsUpdate = false;
+			let newX = rect.left;
+			let newY = rect.top;
+			
+			if (rect.left < margin) {
+				newX = margin;
+				needsUpdate = true;
+			} else if (rect.right > window.innerWidth - margin) {
+				newX = window.innerWidth - buttonSize - margin;
+				needsUpdate = true;
+			}
+			
+			if (rect.top < margin) {
+				newY = margin;
+				needsUpdate = true;
+			} else if (rect.bottom > window.innerHeight - margin) {
+				newY = window.innerHeight - buttonSize - margin;
+				needsUpdate = true;
+			}
+			
+			if (needsUpdate) {
+				floatingBtn.style.left = newX + 'px';
+				floatingBtn.style.top = newY + 'px';
+				saveFloatingButtonPosition(floatingBtn);
+			}
+		});
+	}
+
 	function setupFloatingButtonEvents(floatingBtn, summaryPanel) {
 		const mainBtn = floatingBtn.querySelector('.taboracle-main-btn');
 		const hoverButtons = floatingBtn.querySelector('.taboracle-hover-buttons');
@@ -166,17 +363,37 @@
 		const closePanelBtn = summaryPanel.querySelector('.close-panel-btn');
 		const pinPanelBtn = summaryPanel.querySelector('.pin-panel-btn');
 
-		mainBtn.addEventListener('mouseenter', () => {
+		// Load saved position from localStorage
+		loadFloatingButtonPosition(floatingBtn);
+
+		// Add drag functionality
+		setupDragFunctionality(floatingBtn, mainBtn);
+
+		// Add hover timeout to prevent menu from disappearing too quickly
+		let hoverTimeout = null;
+		
+		floatingBtn.addEventListener('mouseenter', () => {
+			if (hoverTimeout) {
+				clearTimeout(hoverTimeout);
+				hoverTimeout = null;
+			}
 			hoverButtons.style.display = 'flex';
 			floatingBtn.classList.add('expanded');
 		});
-		hoverButtons.addEventListener('mouseenter', () => {
-			hoverButtons.style.display = 'flex';
-			floatingBtn.classList.add('expanded');
-		});
+		
 		floatingBtn.addEventListener('mouseleave', () => {
-			hoverButtons.style.display = 'none';
-			floatingBtn.classList.remove('expanded');
+			hoverTimeout = setTimeout(() => {
+				hoverButtons.style.display = 'none';
+				floatingBtn.classList.remove('expanded');
+			}, 150); // Small delay to allow cursor movement
+		});
+		
+		// Ensure menu stays visible when hovering over it
+		hoverButtons.addEventListener('mouseenter', () => {
+			if (hoverTimeout) {
+				clearTimeout(hoverTimeout);
+				hoverTimeout = null;
+			}
 		});
 
 		summarizeBtn.addEventListener('click', async (e) => {
@@ -476,12 +693,13 @@
 		const style = document.createElement('style');
 		style.id = 'taboracle-floating-styles';
 		style.textContent = `
-			#taboracle-floating-btn { position: fixed; bottom: 30px; right: 30px; z-index: 2147483647; display: flex; flex-direction: column; align-items: flex-end; transition: all 0.3s ease; pointer-events: auto; }
-			.taboracle-main-btn { width: 72px; height: 72px; background: transparent; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: none; transition: all 0.3s ease; position: relative; z-index: 2147483647; }
+			#taboracle-floating-btn { position: fixed; bottom: 30px; right: 30px; z-index: 2147483647; transition: none; pointer-events: auto; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; }
+			.taboracle-main-btn { width: 72px; height: 72px; background: transparent; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: grab; box-shadow: none; transition: transform 0.3s ease; position: relative; z-index: 2147483647; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; }
+			.taboracle-main-btn:active { cursor: grabbing; }
 			.taboracle-main-btn:hover { transform: scale(1.06); }
 			.taboracle-icon { width: 72px; height: 72px; object-fit: contain; display: block; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35)) drop-shadow(0 0 1px rgba(0,0,0,0.45)); }
-			.taboracle-hover-buttons { display: none; flex-direction: column; gap: 12px; margin-bottom: 15px; opacity: 0; transform: translateY(10px); transition: all 0.3s ease; }
-			#taboracle-floating-btn.expanded .taboracle-hover-buttons { opacity: 1; transform: translateY(0); }
+			.taboracle-hover-buttons { display: none; position: absolute; bottom: 100%; right: 0; flex-direction: column-reverse; gap: 8px; margin-bottom: 8px; opacity: 0; transform: translateY(-10px); transition: all 0.3s ease; pointer-events: none; }
+			#taboracle-floating-btn.expanded .taboracle-hover-buttons { opacity: 1; transform: translateY(0); pointer-events: auto; }
 			.taboracle-hover-btn { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: #ffffff; border: 2px solid rgba(139, 92, 246, 0.35); border-radius: 25px; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 600; color: #1f2937; box-shadow: 0 6px 16px rgba(139, 92, 246, 0.15); transition: all 0.2s ease; white-space: nowrap; }
 			.taboracle-hover-btn:hover { border-color: #8b5cf6; background: rgba(139, 92, 246, 0.06); transform: translateX(-4px); box-shadow: 0 8px 18px rgba(139, 92, 246, 0.25); }
 			.summary-panel-header { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-top-left-radius: 20px; border-top-right-radius: 20px; height: 44px; box-sizing: border-box; }

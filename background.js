@@ -339,6 +339,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 }
             });
             return true; // Keep message channel open
+        } else if (message.action === 'embeddingRankTabs') {
+            // Rank tabs using offscreen embedding model
+            (async () => {
+                try {
+                    const { query, maxTabs = 15, contentChars = 1800 } = message;
+                    const all = await ensureTabsLoaded();
+                    const candidates = all.slice(0, Math.max(1, Math.min(maxTabs, all.length)));
+
+                    // Build documents from tab title/url + truncated content
+                    const documents = [];
+                    for (const tab of candidates) {
+                        let doc = `${tab.title || ''}\n${tab.url || ''}\n`;
+                        try {
+                            const content = await extractTabContent(tab.id);
+                            const text = typeof content === 'string' ? content : (content?.content || '');
+                            if (text) doc += String(text).slice(0, contentChars);
+                        } catch (_) {}
+                        documents.push(doc);
+                    }
+
+                    // Ask offscreen embedding page to rank
+                    const resp = await new Promise((resolve) => {
+                        try {
+                            chrome.runtime.sendMessage({ action: 'embeddingRank', query, documents }, (r) => {
+                                if (chrome.runtime.lastError) {
+                                    resolve({ success: false, error: chrome.runtime.lastError.message });
+                                } else {
+                                    resolve(r);
+                                }
+                            });
+                        } catch (e) {
+                            resolve({ success: false, error: e.message });
+                        }
+                    });
+
+                    if (resp && resp.success && Array.isArray(resp.scores)) {
+                        const scored = resp.scores.map(({ index, score }) => {
+                            const tab = candidates[index];
+                            return tab ? { ...tab, score } : null;
+                        }).filter(Boolean).sort((a, b) => (b.score || 0) - (a.score || 0));
+                        sendResponse({ success: true, results: scored });
+                    } else {
+                        sendResponse({ success: false, error: (resp && resp.error) || 'Embedding ranking unavailable' });
+                    }
+                } catch (error) {
+                    sendResponse({ success: false, error: error.message });
+                }
+            })();
+            return true; // async
         } else if (message.action === 'generateAIExplanation') {
             handleAIExplanationRequest(message, sender, sendResponse);
             return true; // Keep message channel open for async response
@@ -752,6 +801,110 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
             return true; // Keep message channel open
         }
+        else if (message.action === 'embeddingInit') {
+            (async () => {
+                try {
+                    await ensureOffscreenEmbedding();
+                    const resp = await sendMessageWithTimeoutOffscreen({ action: 'embeddingInit', options: message.options }, 15000);
+                    sendResponse(resp);
+                } catch (e) {
+                    sendResponse({ success: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+        else if (message.action === 'embeddingCompute') {
+            (async () => {
+                try {
+                    console.log('🔍 TabOracle: Ensuring offscreen for embedding...');
+                    await ensureOffscreenEmbedding();
+                    const resp = await sendMessageWithTimeoutOffscreen({ action: 'embeddingCompute', texts: message.texts, mode: message.mode }, 30000);
+                    sendResponse(resp);
+                } catch (e) {
+                    sendResponse({ success: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+        else if (message.action === 'embeddingRank') {
+            (async () => {
+                try {
+                    await ensureOffscreenEmbedding();
+                    const resp = await sendMessageWithTimeoutOffscreen({ action: 'embeddingRank', query: message.query, documents: message.documents }, 30000);
+                    sendResponse(resp);
+                } catch (e) {
+                    sendResponse({ success: false, error: e.message });
+                }
+            })();
+            return true;
+        }
+        else if (message.action === 'embeddingRankTabs') {
+            (async () => {
+                try {
+                    const query = String(message.query || '');
+                    if (!query) {
+                        sendResponse({ success: false, error: 'No query provided' });
+                        return;
+                    }
+
+                    const maxTabs = Math.max(1, Math.min(20, Number(message.maxTabs || 12)));
+                    const contentChars = Math.max(200, Math.min(6000, Number(message.contentChars || 2000)));
+
+                    const currentTabs = await ensureTabsLoaded();
+                    const eligible = (currentTabs || []).filter(t => {
+                        const url = (t.url || '').toLowerCase();
+                        return url &&
+                            !url.startsWith('chrome://') &&
+                            !url.startsWith('edge://') &&
+                            !url.startsWith('about:') &&
+                            !url.startsWith('chrome-extension://');
+                    }).slice(0, maxTabs);
+
+                    // Extract lightweight content previews in parallel
+                    const previews = await Promise.all(eligible.map(async (t) => {
+                        try {
+                            const contentObj = await extractTabContent(t.id);
+                            const title = t.title || contentObj?.title || '';
+                            const text = (typeof contentObj === 'string' ? contentObj : (contentObj?.content || '')) || '';
+                            const snippet = text.replace(/\s+/g, ' ').slice(0, contentChars);
+                            return { tab: t, doc: `title: ${title}\ntext: ${snippet}` };
+                        } catch (_) {
+                            return { tab: t, doc: `title: ${t.title || ''}\ntext: ` };
+                        }
+                    }));
+
+                    await ensureOffscreenEmbedding();
+                    const rankResp = await sendMessageWithTimeoutOffscreen({
+                        action: 'embeddingRank',
+                        query,
+                        documents: previews.map(p => p.doc)
+                    }, 45000);
+
+                    if (!rankResp || !rankResp.success) {
+                        sendResponse({ success: false, error: rankResp && rankResp.error || 'Ranking failed' });
+                        return;
+                    }
+
+                    const scores = Array.isArray(rankResp.scores) ? rankResp.scores : [];
+                    const results = scores.map(s => {
+                        const p = previews[s.index];
+                        return {
+                            tabId: p?.tab?.id,
+                            windowId: p?.tab?.windowId,
+                            title: p?.tab?.title,
+                            url: p?.tab?.url,
+                            favIconUrl: p?.tab?.favIconUrl,
+                            score: s.score
+                        };
+                    }).filter(r => r && typeof r.tabId === 'number').sort((a, b) => b.score - a.score);
+
+                    sendResponse({ success: true, results });
+                } catch (e) {
+                    sendResponse({ success: false, error: e.message });
+                }
+            })();
+            return true;
+        }
     } catch (error) {
         console.error('❌ TabOracle: Error handling message:', error);
         sendResponse({ error: error.message, tabsCount: currentTabs ? currentTabs.length : 0 });
@@ -870,6 +1023,60 @@ async function ensureOffscreenDocument() {
         // If the document already exists, Chrome throws an error we can safely ignore
         console.log('ℹ️ TabOracle: Offscreen document create result:', e && e.message ? e.message : 'ok/exists');
     }
+}
+
+// ===== EMBEDDING OFFSCREEN MANAGEMENT =====
+async function ensureOffscreenEmbedding() {
+    try {
+        const exists = await chrome.offscreen.hasDocument?.();
+        if (!exists) {
+            await chrome.offscreen.createDocument({
+                url: chrome.runtime.getURL('offscreen.html'),
+                reasons: ['DOM_PARSER'],
+                justification: 'Run embedding model (Transformers.js) in offscreen context'
+            });
+        }
+    } catch (e) {
+        // Try fallback creation
+        try {
+            await chrome.offscreen.createDocument({
+                url: chrome.runtime.getURL('offscreen.html'),
+                reasons: ['DOM_PARSER'],
+                justification: 'Run embedding model (Transformers.js) in offscreen context'
+            });
+        } catch (_) {}
+    }
+}
+
+function sendMessageWithTimeoutOffscreen(msg, timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+            if (!settled) {
+                settled = true;
+                reject(new Error('Offscreen embedding timeout'));
+            }
+        }, timeoutMs);
+        try {
+            chrome.runtime.sendMessage(msg, (resp) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                const lastErr = chrome.runtime.lastError;
+                if (lastErr) {
+                    reject(new Error(lastErr.message));
+                    return;
+                }
+                resolve(resp);
+            });
+        } catch (e) {
+            if (!settled) {
+                settled = true;
+                clearTimeout(timer);
+                reject(e);
+            }
+        }
+    });
 }
 async function processPDFContent(tabId, url) {
     try {

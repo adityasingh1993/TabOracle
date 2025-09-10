@@ -41,9 +41,9 @@
                     <span class="tab-icon">🧠</span>
                     <span class="tab-label">AI Search</span>
                 </button>
-                <button class="nav-tab" data-tab="pageSummaryTab">
-                    <span class="tab-icon">📝</span>
-                    <span class="tab-label">Summary</span>
+                <button class="nav-tab" data-tab="settingsTab">
+                    <span class="tab-icon">⚙️</span>
+                    <span class="tab-label">Settings</span>
                 </button>
                 <button class="nav-tab" data-tab="debugTab">
                     <span class="tab-icon">🐛</span>
@@ -108,6 +108,13 @@
             <!-- Smart Search Tab -->
             <section class="tab-panel" id="smartSearchTab">
                 <div class="ai-search-section">
+                    <div class="ai-toolbar">
+                        <div class="model-status-pill" id="modelStatusPill" title="Embedding model status">Model: —</div>
+                        <button id="clearAISearch" class="secondary-button small" title="Clear">
+                            <span class="button-icon">✖️</span>
+                            <span>Clear</span>
+                        </button>
+                    </div>
                     <div class="search-wrapper">
                         <div class="ai-search-input-container">
                             <input 
@@ -124,6 +131,12 @@
                             </div>
                         </div>
                     </div>
+                    <div class="suggested-chips" id="suggestedChips">
+                        <button class="chip" data-prompt="Docs about Kubernetes ingress">Kubernetes ingress</button>
+                        <button class="chip" data-prompt="Tabs about performance optimization in React">React perf</button>
+                        <button class="chip" data-prompt="Where did I read about WebAssembly CSP?">WASM CSP</button>
+                        <button class="chip" data-prompt="Payment integration code in my tabs">Payments</button>
+                    </div>
                     
                     <div class="ai-instructions">
                         <div class="instruction-card">
@@ -137,50 +150,58 @@
                         </div>
                     </div>
                     
+
                     <div class="ai-results" id="smartSearchResults" style="display: none;">
                         <!-- AI search results will be displayed here -->
                     </div>
                 </div>
             </section>
 
-            <!-- Page Summary Tab -->
-            <section class="tab-panel" id="pageSummaryTab">
-                <div class="summary-section">
-                    <div class="summary-actions">
-                        <button id="generateSummary" class="primary-button">
-                            <span class="button-icon">
-                            <img src="taboracle_icon_only.svg" 
-                                 alt="TabOracle" 
-                                 style="
-                                     width: 24px;
-                                     height: 24px;
-                                     filter: brightness(0) invert(1);
-                                 "
-                                 onerror="this.style.display='none'; this.parentElement.innerHTML='✨';">
-                        </span>
-                            <span>Generate Summary</span>
-                        </button>
-                        <button id="testLanguageModel" class="secondary-button">
-                            <span class="button-icon">🧪</span>
-                            <span>Test AI</span>
-                        </button>
-
-
-                        <div id="geminiNotice" class="notice" style="display:none;">
-                            <div class="notice-text">
-                                <strong>AI Features Note:</strong><br>
-                                Chrome Language Model (Gemini Nano) may not be available on Windows yet.<br>
-                                TabOracle will use intelligent fallback for summaries.
+            <!-- Settings Tab -->
+            <section class="tab-panel" id="settingsTab">
+                <div class="settings-section">
+                    <div class="settings-grid">
+                        <div class="settings-card" id="promptApiCard">
+                            <div class="settings-card-header">
+                                Prompt API
+                                <span class="status-pill" id="promptApiStatus">Checking…</span>
                             </div>
-                            <div class="notice-actions">
-                                <button id="openFlags" class="secondary-button">Try Enable AI</button>
+                            <div class="settings-card-body">
+                                <p>Enable or disable the Prompt API via Chrome flags.</p>
+                                <div class="settings-actions">
+                                    <button id="openPromptFlags" class="secondary-button"><span class="button-icon">🚩</span><span>Open Prompt API Flags</span></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="settings-card">
+                            <div class="settings-card-header">TabOracle Diagnostics</div>
+                            <div class="settings-card-body">
+                                <p>Verify that TabOracle can access tab data and AI components.</p>
+                                <div class="settings-actions">
+                                    <button id="testTabOracle" class="primary-button"><span class="button-icon">🧪</span><span>Test TabOracle</span></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="settings-card">
+                            <div class="settings-card-header">AI Model</div>
+                            <div class="settings-card-body">
+                                <p>Initialize the browser language model and run a quick check.</p>
+                                <div class="settings-actions">
+                                    <button id="testLanguageModel" class="secondary-button"><span class="button-icon">🧠</span><span>Test AI</span></button>
+                                </div>
+                                <div id="geminiNotice" class="notice" style="display:none; margin-top: 8px;">
+                                    <div class="notice-text">
+                                        <strong>AI Features Note:</strong><br>
+                                        Chrome Language Model (Gemini Nano) may not be available on your device yet.
+                                    </div>
+                                    <div class="notice-actions">
+                                        <button id="openFlags" class="secondary-button">Open Chrome Flags</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="summary-content" id="pageSummaryContent">
-                        <!-- Summary will be displayed here -->
-                    </div>
+                    <div id="settingsOutput" class="settings-output"></div>
                 </div>
             </section>
 
