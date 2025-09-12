@@ -237,14 +237,20 @@ class TabOraclePopup {
                 return;
             }
             const modelName = this.currentModel === 'custom' ? 'EmbeddingGemma' : 'Browser';
-            // Ask background if browser model is actually available
+            // Ask background if browser model is actually available and toggle notice accordingly
             if (this.currentModel === 'browser') {
                 try {
                     const st = await this.sendMessageWithTimeout({ action: 'lmStatus' }, 5000);
                     const avail = !!(st && st.success && st.available);
                     this.modelStatusEl.textContent = `Model: ${avail ? 'Browser' : 'Unavailable'}`;
+                    if (avail) {
+                        this.hidePromptApiNotice?.();
+                    } else {
+                        this.showPromptApiNotice?.();
+                    }
                 } catch (_) {
                     this.modelStatusEl.textContent = `Model: Unavailable`;
+                    this.showPromptApiNotice?.();
                 }
             } else {
                 this.modelStatusEl.textContent = `Model: ${modelName}`;
@@ -395,7 +401,7 @@ class TabOraclePopup {
                              height: 80px;
                              animation: logoGlow 2s infinite;
                          "
-                         onerror="this.style.display='none'; this.parentElement.innerHTML='✨';">
+                         data-loading-logo>
                 </div>
                     <div class="loading-text">${this.escapeHtml(message)}</div>
                     <div class="loading-subtext">Please wait while we analyze the page</div>
@@ -493,7 +499,13 @@ class TabOraclePopup {
                     const pageUrl = activeTab.url || '';
                     await this.ensureLanguageModelInitialized();
                     if (this.languageModel && this.languageModel.prompt) {
-                        const prompt = `Return ONLY valid JSON. Summarize page with keys: summary, mainTopic, keyPoints, contentType, wordCount, estimatedReadingTime, confidence.\nTitle: ${pageTitle}\nURL: ${pageUrl}\nContent: ${pageContent.substring(0, 8000)}`;
+                        const prompt = `Summarize the following text into a clear, concise summary. Focus on the main ideas, avoid unnecessary details, and use simple language. Limit the summary to 2-3 sentences.
+
+Title: ${pageTitle}
+URL: ${pageUrl}
+Content: ${pageContent.substring(0, 8000)}
+
+Return ONLY valid JSON with keys: summary, mainTopic, keyPoints, contentType, wordCount, estimatedReadingTime, confidence.`;
                         const response = await this.languageModel.prompt(prompt);
                         const raw = typeof response === 'string' ? response : (response?.text || response?.response || JSON.stringify(response));
                         popupSummary = this.parseAIJsonSafely(raw);
@@ -728,9 +740,9 @@ class TabOraclePopup {
                 console.log('🎯 TabOracle: User clicked review button');
             } catch (error) {
                 console.error('❌ TabOracle: Error opening review URL:', error);
-                // Fallback: try to open a generic review page
+                // Fallback: open Chrome Web Store search for TabOracle
                 try {
-                    window.open('https://chrome.google.com/webstore/detail/taboracle-ai-powered-tab-intelligence/reviews', '_blank');
+                    window.open('https://chrome.google.com/webstore/search/taboracle', '_blank');
                 } catch (fallbackError) {
                     console.error('❌ TabOracle: Fallback also failed:', fallbackError);
                 }
@@ -892,13 +904,34 @@ class TabOraclePopup {
         
         // Debug button (removed)
         
-        // Debug functionality
-        this.setupDebugEventListeners();
         
         // Back to categories button (will be added dynamically)
         document.addEventListener('click', (e) => {
             if (e.target.id === 'backToCategoriesBtn') {
                 this.goBackToCategories();
+            }
+        });
+
+        // Handle favicon error events
+        document.addEventListener('error', (e) => {
+            if (e.target.hasAttribute('data-favicon-error')) {
+                e.target.style.display = 'none';
+                e.target.parentElement.classList.add('no-favicon');
+            } else if (e.target.hasAttribute('data-loading-logo')) {
+                e.target.style.display = 'none';
+                e.target.parentElement.innerHTML = '✨';
+            }
+        }, true);
+
+        // Handle AI result action clicks
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.ai-result-action')) {
+                const button = e.target.closest('.ai-result-action');
+                const tabId = parseInt(button.getAttribute('data-tab-id'));
+                const windowId = parseInt(button.getAttribute('data-window-id'));
+                if (tabId && windowId) {
+                    this.activateTab(tabId, windowId);
+                }
             }
         });
         
@@ -2088,24 +2121,52 @@ class TabOraclePopup {
         
         for (const tab of this.allTabs) {
             try {
+                // Skip tabs that are likely to cause errors
+                if (tab.url && (
+                    tab.url.startsWith('chrome://') ||
+                    tab.url.startsWith('chrome-extension://') ||
+                    tab.url.startsWith('edge://') ||
+                    tab.url.startsWith('about:') ||
+                    tab.url.includes('chrome-error://') ||
+                    tab.url.includes('chrome://error/') ||
+                    tab.url.includes('chrome://network-error/') ||
+                    tab.url === 'chrome://newtab/'
+                )) {
+                    console.log('⚠️ TabOracle: Skipping restricted/error tab:', tab.url);
+                    continue;
+                }
+
                 // Get tab content from background script
                 const response = await chrome.runtime.sendMessage({
                     action: 'getPageContent',
                     tabId: tab.id
                 });
                 
-                if (response && response.success && response.content) {
+                if (response && response.success) {
+                    // Handle both string content and object content
+                    const content = typeof response.content === 'string' 
+                        ? response.content 
+                        : (response.content?.content || '');
+                    
+                    // Skip tabs with error content
+                    if (response.content?.error || response.content?.restricted) {
+                        console.log('⚠️ TabOracle: Skipping tab with error/restricted content:', tab.title);
+                        continue;
+                    }
+
                     tabsWithContent.push({
                         ...tab,
-                        content: response.content
+                        content: content
                     });
                 } else {
-                    // Fallback to just title and URL
-                    tabsWithContent.push(tab);
+                    // Skip tabs that fail to extract content rather than including them
+                    console.log('⚠️ TabOracle: Skipping tab with failed content extraction:', tab.title);
+                    continue;
                 }
             } catch (error) {
                 console.warn('⚠️ TabOracle: Failed to get content for tab:', tab.id, error);
-                tabsWithContent.push(tab);
+                // Skip tabs that fail rather than including them
+                continue;
             }
         }
         
@@ -2192,7 +2253,7 @@ class TabOraclePopup {
             const tab = tabsWithContent[i];
             const title = tab.title.toLowerCase();
             const url = tab.url.toLowerCase();
-            const content = (tab.content || '').toLowerCase();
+            const content = (typeof tab.content === 'string' ? tab.content : '').toLowerCase();
             
             // Calculate semantic similarity scores
             const semanticScores = this.calculateSemanticSimilarity(semanticQuery, {
@@ -2520,7 +2581,7 @@ class TabOraclePopup {
                         </div>
                         <div class="ai-result-title">${this.escapeHtml(tab.title)}</div>
                         <div class="ai-result-actions">
-                            <button class="ai-result-action" onclick="window.tabOracle.activateTab(${tab.id}, ${tab.windowId})">
+                            <button class="ai-result-action" data-tab-id="${tab.id}" data-window-id="${tab.windowId}">
                                 <span class="action-icon">🔗</span>
                             </button>
                         </div>
@@ -2650,7 +2711,7 @@ class TabOraclePopup {
         const category = this.getCategoryDisplay(tab);
         
         const faviconHtml = favicon ? 
-            `<img class="tab-favicon" src="${favicon}" alt="favicon" onerror="this.style.display='none'; this.parentElement.classList.add('no-favicon');">` : 
+            `<img class="tab-favicon" src="${favicon}" alt="favicon" data-favicon-error>` : 
             '';
         
         return `
@@ -2739,7 +2800,7 @@ class TabOraclePopup {
         const semanticMatches = tab.semanticMatches || [];
 
         const faviconHtml = favicon ? 
-            `<img src="${favicon}" alt="favicon" onerror="this.style.display='none'; this.parentElement.classList.add('no-favicon');">` : 
+            `<img src="${favicon}" alt="favicon" data-favicon-error>` : 
             '';
 
         return `
@@ -2968,420 +3029,9 @@ class TabOraclePopup {
         }
     }
 
-    setupDebugEventListeners() {
-        console.log('🐛 TabOracle: Setting up debug event listeners...');
-        
-        // Debug buttons
-        const testPingBtn = document.getElementById('testPing');
-        const testGetTabsBtn = document.getElementById('testGetTabs');
-        const testGetCategoriesBtn = document.getElementById('testGetCategories');
-        const testForceRefreshBtn = document.getElementById('testForceRefresh');
-        const testExplainMeBtn = document.getElementById('testExplainMe');
-        const testBasicSearchBtn = document.getElementById('testBasicSearch');
-        const testCategoryClickBtn = document.getElementById('testCategoryClick');
-        const clearDebugResultsBtn = document.getElementById('clearDebugResults');
-        
-        if (testPingBtn) {
-            testPingBtn.addEventListener('click', () => this.testPing());
-        }
-        
-        if (testGetTabsBtn) {
-            testGetTabsBtn.addEventListener('click', () => this.testGetTabs());
-        }
-        
-        if (testGetCategoriesBtn) {
-            testGetCategoriesBtn.addEventListener('click', () => this.testGetCategories());
-        }
-        
-        if (testForceRefreshBtn) {
-            testForceRefreshBtn.addEventListener('click', () => this.testForceRefresh());
-        }
-        
-        if (testExplainMeBtn) {
-            testExplainMeBtn.addEventListener('click', () => this.testExplainMe());
-        }
-        
-        const testPDFTextLayerBtn = document.getElementById('testPDFTextLayer');
-        if (testPDFTextLayerBtn) {
-            testPDFTextLayerBtn.addEventListener('click', () => this.testPDFTextLayer());
-        }
-        
-        if (testBasicSearchBtn) {
-            testBasicSearchBtn.addEventListener('click', () => this.testBasicSearch());
-        }
-        
-        if (testCategoryClickBtn) {
-            testCategoryClickBtn.addEventListener('click', () => this.testCategoryClick());
-        }
-        
-        if (clearDebugResultsBtn) {
-            clearDebugResultsBtn.addEventListener('click', () => this.clearDebugResults());
-        }
-        
-        // Add basic environment test
-        this.testBasicEnvironment();
-        
-        console.log('🐛 TabOracle: Debug event listeners setup complete');
-    }
 
-    testBasicEnvironment() {
-        console.log('🧪 TabOracle: Testing basic environment...');
-        
-        const debugResults = document.getElementById('debugResults');
-        if (!debugResults) return;
-        
-        this.logDebug('🧪 Testing basic environment...', 'info');
-        
-        // Test 1: Check if we're in extension context
-        if (typeof chrome === 'undefined') {
-            this.logDebug('❌ chrome object is undefined', 'error');
-        } else {
-            this.logDebug('✅ chrome object is available', 'success');
-        }
-        
-        // Test 2: Check chrome.runtime
-        if (typeof chrome !== 'undefined' && !chrome.runtime) {
-            this.logDebug('❌ chrome.runtime is undefined', 'error');
-        } else if (typeof chrome !== 'undefined' && chrome.runtime) {
-            this.logDebug('✅ chrome.runtime is available', 'success');
-        }
-        
-        // Test 3: Check chrome.tabs
-        if (typeof chrome !== 'undefined' && !chrome.tabs) {
-            this.logDebug('❌ chrome.tabs is undefined', 'error');
-        } else if (typeof chrome !== 'undefined' && chrome.tabs) {
-            this.logDebug('✅ chrome.tabs is available', 'success');
-        }
-        
-        // Test 4: Check if we can access extension APIs
-        try {
-            if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
-                this.logDebug(`✅ Extension ID: ${chrome.runtime.id}`, 'success');
-            } else {
-                this.logDebug('❌ Cannot get extension ID', 'error');
-            }
-        } catch (error) {
-            this.logDebug(`❌ Error getting extension ID: ${error.message}`, 'error');
-        }
-        
-        // Test 5: Check if we're in a popup context
-        if (window.location.protocol === 'chrome-extension:') {
-            this.logDebug('✅ Running in chrome-extension context', 'success');
-        } else {
-            this.logDebug(`⚠️ Running in ${window.location.protocol} context`, 'warning');
-        }
-        
-        this.logDebug('🧪 Basic environment test complete', 'info');
-    }
 
-    // Debug functionality methods
-    logDebug(message, type = 'info') {
-        const debugResults = document.getElementById('debugResults');
-        if (!debugResults) return;
-        
-        const timestamp = new Date().toLocaleTimeString();
-        const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
-        
-        debugResults.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
-        debugResults.scrollTop = debugResults.scrollHeight;
-        
-        console.log(`[${timestamp}] ${message}`);
-    }
 
-    clearDebugResults() {
-        const debugResults = document.getElementById('debugResults');
-        if (debugResults) {
-            debugResults.innerHTML = '';
-        }
-    }
-
-    async testPing() {
-        try {
-            this.logDebug('🔍 Testing ping to background script...');
-            
-            const response = await new Promise((resolve, reject) => {
-                chrome.runtime.sendMessage({ action: 'ping' }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        reject(new Error(chrome.runtime.lastError.message));
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-            
-            this.logDebug(`✅ Ping successful: ${JSON.stringify(response, null, 2)}`, 'success');
-            
-        } catch (error) {
-            this.logDebug(`❌ Ping failed: ${error.message}`, 'error');
-        }
-    }
-
-    async testGetTabs() {
-        try {
-            this.logDebug('🔍 Testing getTabs...');
-            
-            const response = await new Promise((resolve, reject) => {
-                chrome.runtime.sendMessage({ action: 'getTabs' }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        reject(new Error(chrome.runtime.lastError.message));
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-            
-            if (response.tabs) {
-                this.logDebug(`✅ GetTabs successful: Found ${response.tabs.length} tabs`, 'success');
-                if (response.tabs.length > 0) {
-                    this.logDebug(`📋 Sample tabs:`, 'info');
-                    response.tabs.slice(0, 3).forEach((tab, index) => {
-                        this.logDebug(`   ${index + 1}. ${tab.title} (${tab.url})`, 'info');
-                    });
-                }
-            } else {
-                this.logDebug(`⚠️ GetTabs response missing tabs: ${JSON.stringify(response)}`, 'warning');
-            }
-            
-        } catch (error) {
-            this.logDebug(`❌ GetTabs failed: ${error.message}`, 'error');
-        }
-    }
-
-    async testGetCategories() {
-        try {
-            this.logDebug('🔍 Testing getCategories...');
-            
-            const response = await new Promise((resolve, reject) => {
-                chrome.runtime.sendMessage({ action: 'getCategories' }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        reject(new Error(chrome.runtime.lastError.message));
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-            
-            if (response.categories) {
-                const categoryCount = Object.keys(response.categories).length;
-                this.logDebug(`✅ GetCategories successful: Found ${categoryCount} categories`, 'success');
-                
-                Object.entries(response.categories).forEach(([category, tabs]) => {
-                    this.logDebug(`   📁 ${category}: ${tabs.length} tabs`, 'info');
-                });
-            } else {
-                this.logDebug(`⚠️ GetCategories response missing categories: ${JSON.stringify(response)}`, 'warning');
-            }
-            
-        } catch (error) {
-            this.logDebug(`❌ GetCategories failed: ${error.message}`, 'error');
-        }
-    }
-
-    async testForceRefresh() {
-        try {
-            this.logDebug('🔍 Testing force refresh...');
-            
-            const response = await new Promise((resolve, reject) => {
-                chrome.runtime.sendMessage({ action: 'forceRefreshTabs' }, (response) => {
-                    if (chrome.runtime.lastError) {
-                        reject(new Error(chrome.runtime.lastError.message));
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-            
-            if (response.success) {
-                this.logDebug(`✅ Force refresh successful: ${response.tabsCount} tabs`, 'success');
-            } else {
-                this.logDebug(`⚠️ Force refresh failed: ${response.error}`, 'warning');
-            }
-            
-        } catch (error) {
-            this.logDebug(`❌ Force refresh failed: ${error.message}`, 'error');
-        }
-    }
-
-    // Test Explain Me functionality
-    testExplainMe() {
-        try {
-            this.logDebug('🧠 Testing Explain Me functionality...');
-            
-            // Test with sample text
-            const testText = "This is a sample text to test the Explain Me feature. It should display properly in the overlay.";
-            
-            // Send test message to content script
-            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                if (tabs[0]) {
-                    chrome.tabs.sendMessage(tabs[0].id, {
-                        action: 'debug',
-                        testText: testText
-                    }, (response) => {
-                        if (chrome.runtime.lastError) {
-                            this.logDebug(`❌ Explain Me test failed: ${chrome.runtime.lastError.message}`, 'error');
-                        } else if (response && response.success) {
-                            this.logDebug(`✅ Explain Me test successful: ${response.message}`, 'success');
-                        } else {
-                            this.logDebug(`⚠️ Explain Me test response: ${JSON.stringify(response)}`, 'warning');
-                        }
-                    });
-                } else {
-                    this.logDebug('❌ No active tab found for Explain Me test', 'error');
-                }
-            });
-            
-        } catch (error) {
-            this.logDebug(`❌ Explain Me test error: ${error.message}`, 'error');
-        }
-    }
-    
-    // Test PDF Text Layer functionality
-    async testPDFTextLayer() {
-        try {
-            this.logDebug('📄 Testing PDF Text Layer functionality...');
-            
-            // Get active tab
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (!tabs || tabs.length === 0) {
-                this.logDebug('❌ No active tab found for PDF Text Layer test', 'error');
-                return;
-            }
-            
-            const activeTab = tabs[0];
-            this.logDebug(`📄 Active tab: ${activeTab.title} (${activeTab.url})`);
-            
-            // Check if it's a PDF page
-            const isPDFPage = activeTab.url.toLowerCase().includes('.pdf');
-            if (!isPDFPage) {
-                this.logDebug('⚠️ Current page is not a PDF. PDF Text Layer only works on PDF pages.', 'warning');
-                return;
-            }
-            
-            this.logDebug('📄 PDF page detected, setting up PDF Text Layer...');
-            
-            // Send message to background script to setup PDF text layer
-            chrome.runtime.sendMessage({
-                action: 'setupPDFTextLayer',
-                tabId: activeTab.id
-            }, (response) => {
-                if (chrome.runtime.lastError) {
-                    this.logDebug(`❌ PDF Text Layer test failed: ${chrome.runtime.lastError.message}`, 'error');
-                } else if (response && response.success) {
-                    this.logDebug(`✅ PDF Text Layer test successful: ${response.message}`, 'success');
-                } else {
-                    this.logDebug(`⚠️ PDF Text Layer test response: ${JSON.stringify(response)}`, 'warning');
-                }
-            });
-            
-        } catch (error) {
-            this.logDebug(`❌ PDF Text Layer test error: ${error.message}`, 'error');
-        }
-    }
-
-    // Test basic search functionality
-    testBasicSearch() {
-        try {
-            this.logDebug('🔍 Testing basic search functionality...');
-            
-            // Test 1: Check if search input exists
-            if (this.searchInput) {
-                this.logDebug('✅ Search input found', 'success');
-                this.logDebug(`Search input value: "${this.searchInput.value}"`, 'info');
-            } else {
-                this.logDebug('❌ Search input not found', 'error');
-            }
-            
-            // Test 2: Check if tabs list exists
-            if (this.tabsList) {
-                this.logDebug('✅ Tabs list found', 'success');
-                this.logDebug(`Tabs list display: ${this.tabsList.style.display}`, 'info');
-            } else {
-                this.logDebug('❌ Tabs list not found', 'error');
-            }
-            
-            // Test 3: Check if search results exists
-            if (this.searchResults) {
-                this.logDebug('✅ Search results container found', 'success');
-                this.logDebug(`Search results display: ${this.searchResults.style.display}`, 'info');
-            } else {
-                this.logDebug('❌ Search results container not found', 'error');
-            }
-            
-            // Test 4: Check if allTabs is loaded
-            if (this.allTabs && this.allTabs.length > 0) {
-                this.logDebug(`✅ Tabs loaded: ${this.allTabs.length} tabs`, 'success');
-                this.logDebug(`Sample tab: ${this.allTabs[0].title}`, 'info');
-            } else {
-                this.logDebug('❌ No tabs loaded', 'error');
-            }
-            
-            // Test 5: Try to perform a simple search
-            this.logDebug('🔍 Attempting to perform a simple search...', 'info');
-            this.handleNormalSearch('test');
-            
-        } catch (error) {
-            this.logDebug(`❌ Basic search test error: ${error.message}`, 'error');
-        }
-    }
-
-    // Test category click functionality
-    testCategoryClick() {
-        try {
-            this.logDebug('🏷️ Testing category click functionality...');
-            
-            // Test 1: Check if categories grid exists
-            if (this.categoriesGrid) {
-                this.logDebug('✅ Categories grid found', 'success');
-                this.logDebug(`Categories grid display: ${this.categoriesGrid.style.display}`, 'info');
-            } else {
-                this.logDebug('❌ Categories grid not found', 'error');
-                return;
-            }
-            
-            // Test 2: Check if category cards exist
-            const categoryCards = this.categoriesGrid.querySelectorAll('.category-card');
-            if (categoryCards.length > 0) {
-                this.logDebug(`✅ Found ${categoryCards.length} category cards`, 'success');
-                
-                // Test 3: Check first category card structure
-                const firstCard = categoryCards[0];
-                const categoryName = firstCard.getAttribute('data-category');
-                this.logDebug(`First card category: ${categoryName}`, 'info');
-                this.logDebug(`First card HTML: ${firstCard.outerHTML.substring(0, 200)}...`, 'info');
-                
-                // Test 4: Check if click listeners are attached
-                const hasClickListeners = firstCard._categoryClickHandler !== undefined;
-                this.logDebug(`Click listeners attached: ${hasClickListeners}`, hasClickListeners ? 'success' : 'warning');
-                
-                // Test 5: Try to simulate a click
-                this.logDebug('🔍 Simulating category click...', 'info');
-                if (hasClickListeners) {
-                    firstCard._categoryClickHandler();
-                    this.logDebug('✅ Category click simulated successfully', 'success');
-                } else {
-                    this.logDebug('⚠️ No click handler found, trying to add one', 'warning');
-                    this.addCategoryClickListeners();
-                    
-                    // Try again after adding listeners
-                    setTimeout(() => {
-                        const updatedCard = this.categoriesGrid.querySelector('.category-card');
-                        if (updatedCard && updatedCard._categoryClickHandler) {
-                            this.logDebug('✅ Click handler added, simulating click...', 'success');
-                            updatedCard._categoryClickHandler();
-                        } else {
-                            this.logDebug('❌ Still no click handler after adding', 'error');
-                        }
-                    }, 100);
-                }
-            } else {
-                this.logDebug('❌ No category cards found', 'error');
-                this.logDebug('Categories grid HTML:', this.categoriesGrid.innerHTML.substring(0, 200) + '...', 'info');
-            }
-            
-        } catch (error) {
-            this.logDebug(`❌ Category click test error: ${error.message}`, 'error');
-        }
-    }
 }
 
 // Initialize the popup when DOM is loaded

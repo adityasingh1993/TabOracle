@@ -960,43 +960,76 @@ class ChromeLanguageModelManager {
             if (this.model && this.modelMethod) {
                 console.log('🧠 TabOracle: Using language model for summary generation');
                 
-                const prompt = `
-                    Generate a comprehensive summary of this web page content.
+                // Choose prompt style based on content type
+                const getPromptStyle = (title, url, content) => {
+                    const urlLower = (url || '').toLowerCase();
+                    const titleLower = (title || '').toLowerCase();
+                    const contentLower = content.toLowerCase();
                     
-                    Page Information:
-                    - Title: ${pageTitle || 'Untitled'}
-                    - URL: ${pageUrl || 'Unknown'}
-                    - Content: ${pageContent}
-                    
-                    Task: Create a concise, informative summary that captures the main points and purpose of this page.
-                    
-                    Instructions:
-                    1. Identify the main topic and purpose of the page
-                    2. Extract key information and important points
-                    3. Provide a clear, well-structured summary
-                    4. Include relevant statistics or data if present
-                    5. Make it easy to understand for any reader
-                    
-                    Return a JSON object with this exact format:
-                    {
-                        "summary": "A clear, concise summary of the page content in 2-3 sentences",
-                        "mainTopic": "The primary subject or purpose of the page",
-                        "keyPoints": ["Key point 1", "Key point 2", "Key point 3"],
-                        "contentType": "article|documentation|news|product|other",
-                        "wordCount": ${pageContent.split(' ').length},
-                        "estimatedReadingTime": "X minutes",
-                        "confidence": 0.95
+                    // Technical documentation
+                    if (urlLower.includes('docs.') || urlLower.includes('documentation') || 
+                        titleLower.includes('api') || titleLower.includes('guide') || 
+                        contentLower.includes('function') || contentLower.includes('method')) {
+                        return `Summarize the following technical documentation into a clear, concise summary. Focus on the main concepts, key functions, and practical applications. Limit the summary to 2-3 sentences.
+
+Page Information:
+- Title: ${pageTitle || 'Untitled'}
+- URL: ${pageUrl || 'Unknown'}
+- Content: ${pageContent}`;
                     }
                     
-                    Guidelines:
-                    - summary: 2-3 sentences maximum, clear and informative
-                    - mainTopic: Single phrase describing the page's purpose
-                    - keyPoints: 3-5 most important points from the content
-                    - contentType: Choose the most appropriate category
-                    - wordCount: Actual word count from the content
-                    - estimatedReadingTime: Based on average reading speed (200-250 words/minute)
-                    - confidence: 0.0-1.0 (how confident in this summary)
-                `;
+                    // News articles
+                    if (urlLower.includes('news') || titleLower.includes('breaking') || 
+                        contentLower.includes('reported') || contentLower.includes('according to')) {
+                        return `Summarize the following news article into a clear, concise summary. Focus on the main story, key facts, and important details. Limit the summary to 2-3 sentences.
+
+Page Information:
+- Title: ${pageTitle || 'Untitled'}
+- URL: ${pageUrl || 'Unknown'}
+- Content: ${pageContent}`;
+                    }
+                    
+                    // Business/professional content
+                    if (contentLower.includes('business') || contentLower.includes('company') || 
+                        contentLower.includes('revenue') || contentLower.includes('market')) {
+                        return `Create an executive summary of the following business content. Focus on actionable insights, key outcomes, and strategic implications. Limit the summary to 2-3 sentences.
+
+Page Information:
+- Title: ${pageTitle || 'Untitled'}
+- URL: ${pageUrl || 'Unknown'}
+- Content: ${pageContent}`;
+                    }
+                    
+                    // Default general audience
+                    return `Summarize the following text into a clear, concise summary. Focus on the main ideas, avoid unnecessary details, and use simple language. Limit the summary to 2-3 sentences.
+
+Page Information:
+- Title: ${pageTitle || 'Untitled'}
+- URL: ${pageUrl || 'Unknown'}
+- Content: ${pageContent}`;
+                };
+
+                const prompt = `${getPromptStyle(pageTitle, pageUrl, pageContent)}
+
+Return a JSON object with this exact format:
+{
+    "summary": "A clear, concise summary of the page content in 2-3 sentences",
+    "mainTopic": "The primary subject or purpose of the page",
+    "keyPoints": ["Key point 1", "Key point 2", "Key point 3", "Key point 4", "Key point 5"],
+    "contentType": "article|documentation|news|product|blog|forum|other",
+    "wordCount": ${pageContent.split(' ').length},
+    "estimatedReadingTime": "X minutes",
+    "confidence": 0.95
+}
+
+Guidelines:
+- summary: 2-3 sentences maximum, clear and informative
+- mainTopic: Single phrase describing the page's purpose
+- keyPoints: 5 most important points from the content
+- contentType: Choose the most appropriate category
+- wordCount: Actual word count from the content
+- estimatedReadingTime: Based on average reading speed (200-250 words/minute)
+- confidence: 0.0-1.0 (how confident in this summary)`;
 
                 console.log('🧠 TabOracle: Sending page summary prompt to language model...');
                 console.log('🧠 TabOracle: Prompt length:', prompt.length);

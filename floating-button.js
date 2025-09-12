@@ -83,7 +83,7 @@
 			summaryPanel.innerHTML = `
 				<div class="summary-panel-header">
 					<div class="summary-header-left">
-						<img src="${chrome.runtime.getURL('taboracle_combined.svg')}" alt="TabOracle" class="summary-brand" onerror="this.style.display='none'" />
+						<img src="${chrome.runtime.getURL('taboracle_combined.svg')}" alt="TabOracle" class="summary-brand" data-brand-error />
 					</div>
 					<div class="summary-header-center">
 						<span class="panel-title">Summarize Me</span>
@@ -96,7 +96,7 @@
 				<div class="summary-panel-body">
 					<div class="summary-loading" style="display: none; text-align: center; padding: 40px 20px;">
 						<div class="loading-logo" style="margin-bottom: 16px; display: flex; justify-content: center; align-items: center;">
-							<img src="${chrome.runtime.getURL('taboracle_icon_only.svg')}" alt="TabOracle" style="width: 80px; height: 80px; animation: logoGlow 2s infinite;" onerror="this.style.display='none'; this.parentElement.innerHTML='✨';" />
+							<img src="${chrome.runtime.getURL('taboracle_icon_only.svg')}" alt="TabOracle" style="width: 80px; height: 80px; animation: logoGlow 2s infinite;" data-loading-logo />
 						</div>
 						<div class="loading-text" style="font-size: 18px; color: #6d28d9; margin-bottom: 8px; font-weight: 600; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">AI is analyzing your text...</div>
 						<div class="loading-subtext" style="font-size: 14px; color: #6b7280; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">This may take a few seconds</div>
@@ -122,7 +122,7 @@
 			chatPanel.innerHTML = `
 				<div class="chat-panel-header">
 					<div class="chat-header-left">
-						<img src="${chrome.runtime.getURL('taboracle_combined.svg')}" alt="TabOracle" class="chat-brand" onerror="this.style.display='none'" />
+						<img src="${chrome.runtime.getURL('taboracle_combined.svg')}" alt="TabOracle" class="chat-brand" data-brand-error />
 					</div>
 					<div class="chat-header-center">
 						<span class="panel-title"><strong>Ask Page</strong></span>
@@ -450,7 +450,8 @@
 					const reviewUrl = `https://chrome.google.com/webstore/detail/${extensionId}/reviews`;
 					chrome.tabs.create({ url: reviewUrl });
 				} catch (_) {
-					try { window.open('https://chrome.google.com/webstore/detail/taboracle-ai-powered-tab-intelligence/reviews', '_blank'); } catch (_) {}
+					// Fallback: open Chrome Web Store search for TabOracle
+					try { window.open('https://chrome.google.com/webstore/search/taboracle', '_blank'); } catch (_) {}
 				}
 			}
 			if (target && target.id === 'summarySupportButton') {
@@ -632,7 +633,19 @@
 	}
 
 	async function generateAISummary(title, content) {
-		const prompt = `Please provide a comprehensive summary of the following content:\n\nTitle: ${title}\n\nContent: ${content.substring(0, 8000)}${content.length > 8000 ? '...' : ''}\n\nPlease provide:\n1. A concise summary (2-3 sentences)\n2. 3-5 key points\n3. Word count\n4. Estimated reading time\n\nFormat the response as JSON:\n{\n  "summary": "Brief summary here",\n  "keyPoints": ["Point 1", "Point 2", "Point 3"],\n  "wordCount": 1234,\n  "readingTime": "5 minutes"\n}`;
+		const prompt = `Summarize the following text into a clear, concise summary. Focus on the main ideas, avoid unnecessary details, and use simple language. Limit the summary to 2-3 sentences.
+
+Title: ${title}
+
+Content: ${content.substring(0, 8000)}${content.length > 8000 ? '...' : ''}
+
+Format the response as JSON:
+{
+  "summary": "Brief summary here",
+  "keyPoints": ["Point 1", "Point 2", "Point 3", "Point 4", "Point 5"],
+  "wordCount": 1234,
+  "readingTime": "5 minutes"
+}`;
 		try {
 			const resp = await new Promise((resolve, reject) => {
 				try {
@@ -1007,7 +1020,10 @@
 					const extensionId = chrome.runtime.id;
 					const reviewUrl = `https://chrome.google.com/webstore/detail/${extensionId}/reviews`;
 					chrome.tabs.create({ url: reviewUrl });
-				} catch (_) { try { window.open('https://chrome.google.com/webstore', '_blank'); } catch (_) {} }
+				} catch (_) { 
+					// Fallback: open Chrome Web Store search for TabOracle
+					try { window.open('https://chrome.google.com/webstore/search/taboracle', '_blank'); } catch (_) {} 
+				}
 			});
 			supportBtn?.addEventListener('click', () => {
 				const supportUrl = 'https://buymeacoffee.com/adityas';
@@ -1086,4 +1102,14 @@
 	} else {
 		init();
 	}
+
+	// Add error event listeners for CSP compliance
+	document.addEventListener('error', (e) => {
+		if (e.target.hasAttribute('data-brand-error')) {
+			e.target.style.display = 'none';
+		} else if (e.target.hasAttribute('data-loading-logo')) {
+			e.target.style.display = 'none';
+			e.target.parentElement.innerHTML = '✨';
+		}
+	}, true);
 })();

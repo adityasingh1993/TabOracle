@@ -481,7 +481,7 @@
                      height: 80px;
                      animation: logoGlow 2s infinite;
                  "
-                 onerror="this.style.display='none'; this.parentElement.innerHTML='✨';">
+                 data-loading-logo>
         `;
         loadingSpinner.style.cssText = `
             margin-bottom: 16px;
@@ -1195,12 +1195,7 @@ IMPORTANT:
                              filter: grayscale(100%) brightness(0.5);
                              display: block;
                          "
-                         onerror="
-                             console.error('Watermark image failed to load, showing text fallback');
-                             this.style.display='none';
-                             this.nextElementSibling.style.display='block';
-                         "
-                         onload="console.log('Watermark image loaded successfully');">
+                         data-watermark-error>
                     <!-- Text fallback watermark -->
                     <div style="
                         display: none;
@@ -1276,9 +1271,9 @@ IMPORTANT:
             console.log('🎯 TabOracle: User clicked Explain Me review button');
         } catch (error) {
             console.error('❌ TabOracle: Error opening review URL:', error);
-            // Fallback: try to open a generic review page
+            // Fallback: open Chrome Web Store search for TabOracle
             try {
-                window.open('https://chrome.google.com/webstore/detail/taboracle-ai-powered-tab-intelligence/reviews', '_blank');
+                window.open('https://chrome.google.com/webstore/search/taboracle', '_blank');
             } catch (fallbackError) {
                 console.error('❌ TabOracle: Fallback also failed:', fallbackError);
             }
@@ -1686,7 +1681,7 @@ IMPORTANT:
                             width: 24px;
                             height: 24px;
                             border-radius: 4px;
-                        " onerror="this.src='data:image/svg+xml,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 16 16&quot;><rect width=&quot;16&quot; height=&quot;16&quot; fill=&quot;%23ccc&quot;/></svg>'>
+                        " data-favicon-error>
                         ${isPinned ? '<div style="position: absolute; top: -6px; right: -6px; font-size: 12px; background: #ffc107; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">📌</div>' : ''}
                     </div>
                     <div style="flex: 1; min-width: 0;">
@@ -2120,7 +2115,20 @@ IMPORTANT:
             .sort((a, b) => b.score - a.score)
             .slice(0, 3);
         const context = scored.map(s => `Excerpt ${s.i + 1} (relevance ${s.score.toFixed(2)}):\n${chunks[s.i]}`).join('\n\n');
-        const prompt = `Use only the following context to answer the question. If unsure, say you don't know.\n\n${context}\n\nQuestion: ${question}\n\nAnswer:`;
+        const prompt = `You are an expert assistant. Answer the question using the information from the provided context.
+
+Instructions:
+- Provide a **direct answer** to the question
+- Then provide a **brief supporting summary** that explains the reasoning or evidence from the context
+- Be confident and helpful in your response
+- Use the context information to give a complete and accurate answer
+
+Context:
+${context}
+
+Question: ${question}
+
+Answer:`;
         try {
             const resp = await new Promise((resolve, reject) => {
                 try {
@@ -2237,4 +2245,24 @@ IMPORTANT:
     } else {
         createSearchOverlay();
     }
+
+    // Add error event listeners for CSP compliance
+    document.addEventListener('error', (e) => {
+        if (e.target.hasAttribute('data-favicon-error')) {
+            e.target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="%23ccc"/></svg>';
+        } else if (e.target.hasAttribute('data-watermark-error')) {
+            console.error('Watermark image failed to load, showing text fallback');
+            e.target.style.display = 'none';
+            e.target.nextElementSibling.style.display = 'block';
+        } else if (e.target.hasAttribute('data-loading-logo')) {
+            e.target.style.display = 'none';
+            e.target.parentElement.innerHTML = '✨';
+        }
+    }, true);
+
+    document.addEventListener('load', (e) => {
+        if (e.target.hasAttribute('data-watermark-error')) {
+            console.log('Watermark image loaded successfully');
+        }
+    }, true);
 })();

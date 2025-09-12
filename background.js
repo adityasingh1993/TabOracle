@@ -2,8 +2,17 @@
 // Manages extension lifecycle, tab management, search, categories, summary, and context menus
 
 // ===== BACKGROUND SCRIPT INITIALIZATION =====
-console.log('🚀 TabOracle: Background script starting...');
-console.log('🔍 TabOracle: Chrome APIs available:', {
+// Silence verbose logs in production while keeping warnings/errors
+try {
+    const SILENCE_LOGS = true;
+    if (SILENCE_LOGS && typeof console !== 'undefined') {
+        try { console.log = function(){}; } catch (_) {}
+        try { console.info = function(){}; } catch (_) {}
+        try { console.debug = function(){}; } catch (_) {}
+    }
+} catch (_) {}
+console.warn('🚀 TabOracle: Background script starting...');
+console.warn('🔍 TabOracle: Chrome APIs available:', {
     chrome: typeof chrome !== 'undefined',
     runtime: typeof chrome !== 'undefined' && !!chrome.runtime,
     tabs: typeof chrome !== 'undefined' && !!chrome.tabs,
@@ -52,8 +61,9 @@ let contextMenuCreating = false;
 // Persist summaries per tab until tab is closed
 const tabSummaries = {}; // { [tabId:number]: { state: 'in_progress'|'ready'|'error', data?: any, error?: string } }
 
-// ===== OFFLINE RAG-LITE (BM25) CACHE & HELPERS =====
-// In-memory cache for per-page chunk indexes (lives for SW lifetime)
+// ===== RAG (Retrieval-Augmented Generation) HELPERS =====
+// Using full text instead of chunks for better context and accuracy
+// BM25 functions kept for potential future use
 const askPageIndexCache = new Map(); // key -> { chunks: string[], tokens: string[][], df: Map<string, number>, avgLen: number }
 
 function hashStringDjb2(input) {
@@ -142,17 +152,23 @@ function retrieveTopChunks(textKey, fullText, question, k = 5) {
     return top.map(x => ({ chunkIndex: x.i, score: x.s, text: index.chunks[x.i] }));
 }
 
-function composeGroundedPrompt(question, pageTitle, pageUrl, retrieved) {
-    const blocks = retrieved.map((r, idx) => `[[Chunk ${idx + 1} (score ${r.score.toFixed(2)})]]\n${r.text}`).join('\n\n');
+function composeGroundedPrompt(question, pageTitle, pageUrl, fullText) {
     const titleLine = pageTitle ? `Title: ${pageTitle}\n` : '';
     const urlLine = pageUrl ? `URL: ${pageUrl}\n` : '';
-    return `You are a helpful assistant. Answer using ONLY the context chunks below. Quote short fragments to justify. If the answer is not present, reply: "I couldn't find this in the provided page text." and provide 1–2 closest quotes.
-${titleLine}${urlLine}
-Context Chunks:\n${blocks}
+    return `You are an expert assistant. Answer the question using the information from the provided context.
+
+Instructions:
+- Provide a **direct answer** to the question
+- Then provide a **brief supporting summary** that explains the reasoning or evidence from the context
+- Be confident and helpful in your response
+- Use the context information to give a complete and accurate answer
+
+Context:
+${titleLine}${urlLine}${fullText}
 
 Question: ${question}
 
-Answer (concise, 3-6 lines):`;
+Answer:`;
 }
 
 // Initialize tabs on startup
@@ -685,9 +701,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                         return;
                     }
                     const safeContext = String(context || '');
-                    const cacheKey = pageUrl ? `url:${pageUrl}` : `hash:${hashStringDjb2(safeContext)}`;
-                    const retrieved = retrieveTopChunks(cacheKey, safeContext, question, 5);
-                    const prompt = composeGroundedPrompt(question, pageTitle, pageUrl, retrieved).slice(0, 18000);
+                    // Use full text instead of chunks for better context
+                    const prompt = composeGroundedPrompt(question, pageTitle, pageUrl, safeContext).slice(0, 18000);
 
                     let text = '';
                     // Try Chrome Language Model
@@ -780,10 +795,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     if (chrome?.languageModel?.create) {
                         try {
                             const lm = await chrome.languageModel.create();
-                            const resp = await lm.prompt('ping');
-                            sendResponse({ success: true, available: !!resp });
+                            // Consider available if model creation succeeds, regardless of prompt result
+                            try { await lm.prompt('ping'); } catch (_) {}
+                            sendResponse({ success: true, available: true });
                             return;
-                        } catch (_) {}
+                        } catch (_) {
+                            // Creation failed
+                        }
                     }
                     sendResponse({ success: true, available: false });
                 } catch (e) {
@@ -1220,6 +1238,41 @@ async function extractTabContent(tabId) {
             console.warn('⚠️ TabOracle: PDF detection error, continuing with normal extraction:', pdfDetectErr);
         }
         
+        // Check if tab is in an error state before attempting to inject scripts
+        try {
+            const tab = await new Promise((resolve) => {
+                chrome.tabs.get(tabId, (t) => {
+                    if (chrome.runtime.lastError) resolve(null); else resolve(t);
+                });
+            });
+            
+            if (!tab) {
+                console.warn('⚠️ TabOracle: Tab not found:', tabId);
+                return { title: '', content: '', url: '', error: 'Tab not found', timestamp: new Date().toISOString() };
+            }
+            
+            // Check for error pages and restricted content
+            if (tab.status === 'loading' || tab.status === 'unloaded') {
+                console.warn('⚠️ TabOracle: Tab is still loading or unloaded:', tabId);
+                return { title: tab.title || '', content: '', url: tab.url || '', loading: true, timestamp: new Date().toISOString() };
+            }
+            
+            // Check for error pages by URL patterns
+            if (tab.url && (
+                tab.url.includes('chrome-error://') ||
+                tab.url.includes('chrome://error/') ||
+                tab.url.includes('chrome://network-error/') ||
+                tab.url.includes('chrome://dino/') ||
+                tab.url.includes('about:blank') ||
+                tab.url === 'chrome://newtab/'
+            )) {
+                console.warn('⚠️ TabOracle: Error page or restricted content detected:', tab.url);
+                return { title: tab.title || 'Error Page', content: '', url: tab.url, error: 'Error page', timestamp: new Date().toISOString() };
+            }
+        } catch (tabCheckError) {
+            console.warn('⚠️ TabOracle: Could not check tab status:', tabCheckError);
+        }
+
         // First, try to inject content script if it's not already there
         try {
             await chrome.scripting.executeScript({
@@ -1230,6 +1283,8 @@ async function extractTabContent(tabId) {
             await new Promise(resolve => setTimeout(resolve, 200));
         } catch (injectError) {
             console.warn('⚠️ TabOracle: Could not inject content script:', injectError);
+            // If injection fails, return a safe fallback
+            return { title: 'Content Unavailable', content: '', url: '', error: 'Script injection failed', timestamp: new Date().toISOString() };
         }
         
         // Try to get content from content script first
@@ -1254,21 +1309,60 @@ async function extractTabContent(tabId) {
         
         // Fallback: Execute script to get content directly
         console.log('🔍 TabOracle: Using fallback content extraction...');
-        const results = await chrome.scripting.executeScript({
-            target: { tabId: tabId },
-            func: () => {
-                return {
-                    title: document.title,
-                    content: document.body.innerText || document.body.textContent || '',
-                    url: window.location.href,
-                    timestamp: new Date().toISOString()
-                };
+        try {
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                func: () => {
+                    try {
+                        // Check if we're on an error page
+                        if (document.body && (
+                            document.body.innerText.includes('This site can\'t be reached') ||
+                            document.body.innerText.includes('ERR_') ||
+                            document.body.innerText.includes('This page isn\'t working') ||
+                            document.body.innerText.includes('No internet') ||
+                            document.body.innerText.includes('Connection timed out')
+                        )) {
+                            return {
+                                title: document.title || 'Error Page',
+                                content: '',
+                                url: window.location.href,
+                                error: 'Network error page',
+                                timestamp: new Date().toISOString()
+                            };
+                        }
+                        
+                        return {
+                            title: document.title,
+                            content: document.body.innerText || document.body.textContent || '',
+                            url: window.location.href,
+                            timestamp: new Date().toISOString()
+                        };
+                    } catch (e) {
+                        return {
+                            title: 'Content Unavailable',
+                            content: '',
+                            url: window.location.href,
+                            error: 'Script execution failed: ' + e.message,
+                            timestamp: new Date().toISOString()
+                        };
+                    }
+                }
+            });
+            
+            if (results && results[0] && results[0].result) {
+                console.log('✅ TabOracle: Content extracted via fallback method');
+                return results[0].result;
             }
-        });
-        
-        if (results && results[0] && results[0].result) {
-            console.log('✅ TabOracle: Content extracted via fallback method');
-            return results[0].result;
+        } catch (fallbackError) {
+            console.warn('⚠️ TabOracle: Fallback content extraction failed:', fallbackError);
+            // Return a safe fallback for error pages
+            return { 
+                title: 'Content Unavailable', 
+                content: '', 
+                url: '', 
+                error: 'All extraction methods failed: ' + fallbackError.message, 
+                timestamp: new Date().toISOString() 
+            };
         }
         
         console.warn('⚠️ TabOracle: No content could be extracted');
@@ -1490,7 +1584,11 @@ async function generateSummary(tabId, content) {
         if (typeof chrome !== 'undefined' && chrome.languageModel && chrome.languageModel.create) {
             try {
                 const languageModel = await chrome.languageModel.create();
-                const prompt = `Return ONLY valid JSON. Summarize page with keys: summary, mainTopic, keyPoints, contentType, wordCount, estimatedReadingTime, confidence.\nContent: ${content.substring(0, 8000)}`;
+                const prompt = `Summarize the following text into a clear, concise summary. Focus on the main ideas, avoid unnecessary details, and use simple language. Limit the summary to 2-3 sentences.
+
+Content: ${content.substring(0, 8000)}
+
+Return ONLY valid JSON with keys: summary, mainTopic, keyPoints, contentType, wordCount, estimatedReadingTime, confidence.`;
                 const response = await languageModel.prompt(prompt);
                 const raw = typeof response === 'string' ? response : ((response && response.text) || (response && response.response) || JSON.stringify(response));
                 const parsed = parseAIJsonSafely(raw);
